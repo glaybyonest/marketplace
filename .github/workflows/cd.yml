@@ -107,6 +107,7 @@ jobs:
           username: ${{ env.DEPLOY_USER }}
           key: ${{ env.DEPLOY_SSH_KEY }}
           port: ${{ env.DEPLOY_PORT || '22' }}
+          envs: DEPLOY_PATH
           script: |
             mkdir -p "${DEPLOY_PATH}/scripts"
             mkdir -p "${DEPLOY_PATH}/docker/monitoring/prometheus"
@@ -114,7 +115,6 @@ jobs:
             mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/provisioning/datasources"
             mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/provisioning/dashboards"
             mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/dashboards"
-        envs: DEPLOY_PATH
 
       - name: Upload deploy bundle
         uses: appleboy/scp-action@v0.1.7
@@ -133,6 +133,7 @@ jobs:
           username: ${{ env.DEPLOY_USER }}
           key: ${{ env.DEPLOY_SSH_KEY }}
           port: ${{ env.DEPLOY_PORT || '22' }}
+          envs: DEPLOY_PATH,GHCR_USERNAME,GHCR_TOKEN,IMAGE_REF
           script: |
             set -euo pipefail
             cd "${DEPLOY_PATH}"
@@ -144,4 +145,3 @@ jobs:
             export RUN_MIGRATIONS="${{ inputs.run_migrations }}"
             bash scripts/deploy-prod.sh
             docker image prune -af --filter "until=168h"
-        envs: DEPLOY_PATH,GHCR_USERNAME,GHCR_TOKEN,IMAGE_REF
