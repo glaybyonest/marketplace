@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { isCookieAuthMode } from '@/config/auth'
 import { AUTH_UNAUTHORIZED_EVENT } from '@/services/apiClient'
 import { AppRouter } from '@/routes/AppRouter'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
@@ -16,7 +17,10 @@ const App = () => {
   const auth = useAppSelector((state) => state.auth)
 
   useEffect(() => {
-    if (!auth.token) {
+    if (auth.sessionBootstrapped) {
+      return
+    }
+    if (!isCookieAuthMode && !auth.token) {
       return
     }
 
@@ -27,9 +31,15 @@ const App = () => {
         dispatch(forceLogout())
       }
     })
+  }, [auth.sessionBootstrapped, auth.token, dispatch])
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      return
+    }
 
     dispatch(fetchFavoritesThunk({ page: 1, limit: 50 }))
-  }, [auth.token, dispatch])
+  }, [auth.isAuthenticated, dispatch])
 
   useEffect(() => {
     const handleUnauthorized = () => {

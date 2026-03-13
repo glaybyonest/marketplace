@@ -70,6 +70,17 @@ export interface Place {
   updatedAt?: string
 }
 
+export interface SessionInfo {
+  id: string
+  userId: string
+  userAgent?: string
+  ip?: string
+  createdAt?: string
+  lastSeenAt?: string
+  expiresAt?: string
+  isCurrent?: boolean
+}
+
 export interface Review {
   id: string
   productId: string

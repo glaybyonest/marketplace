@@ -38,6 +38,18 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
     return 'Verify your email before signing in'
   }
 
+  if (backendCode === 'rate_limited') {
+    return 'Too many requests. Wait a bit and try again'
+  }
+
+  if (backendCode === 'login_locked') {
+    return 'Too many failed sign-in attempts. Try again later'
+  }
+
+  if (backendCode === 'csrf_invalid') {
+    return 'Security token is missing or expired. Refresh the page and try again'
+  }
+
   if (backendCode === 'invalid_token') {
     return 'This link is invalid or expired'
   }

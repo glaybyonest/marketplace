@@ -18,6 +18,7 @@ var (
 	ErrSessionClosed    = errors.New("session is closed")
 	ErrRateLimited      = errors.New("rate limited")
 	ErrLoginLocked      = errors.New("login locked")
+	ErrCSRFInvalid      = errors.New("csrf invalid")
 	ErrCartEmpty        = errors.New("cart is empty")
 	ErrStockShortage    = errors.New("insufficient stock")
 	ErrUnavailable      = errors.New("product unavailable")

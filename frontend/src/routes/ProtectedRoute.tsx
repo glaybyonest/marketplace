@@ -10,7 +10,11 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ requiredRole }: ProtectedRouteProps) => {
   const location = useLocation()
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, user, sessionBootstrapped } = useAppSelector((state) => state.auth)
+
+  if (!sessionBootstrapped) {
+    return <AppLoader label="Restoring session..." />
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />

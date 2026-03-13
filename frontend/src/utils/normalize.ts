@@ -8,6 +8,7 @@ import type {
   Product,
   ProductSpecs,
   Review,
+  SessionInfo,
   User,
   UserRole,
 } from '@/types/domain'
@@ -138,6 +139,20 @@ export const normalizePlace = (input: unknown): Place => {
     lon: typeof source.lon === 'number' ? source.lon : undefined,
     createdAt: pickString(source.created_at, pickString(source.createdAt)),
     updatedAt: pickString(source.updated_at, pickString(source.updatedAt)),
+  }
+}
+
+export const normalizeSession = (input: unknown): SessionInfo => {
+  const source = asRecord(input)
+  return {
+    id: pickString(source.id, createId()),
+    userId: pickString(source.user_id, pickString(source.userId)),
+    userAgent: pickString(source.user_agent, pickString(source.userAgent)) || undefined,
+    ip: pickString(source.ip) || undefined,
+    createdAt: pickString(source.created_at, pickString(source.createdAt)) || undefined,
+    lastSeenAt: pickString(source.last_seen_at, pickString(source.lastSeenAt)) || undefined,
+    expiresAt: pickString(source.expires_at, pickString(source.expiresAt)) || undefined,
+    isCurrent: Boolean(source.is_current ?? source.isCurrent),
   }
 }
 

@@ -29,9 +29,11 @@ type AuthUserRepository interface {
 type AuthSessionRepository interface {
 	Create(ctx context.Context, input CreateSessionInput) (domain.UserSession, error)
 	GetByRefreshTokenHash(ctx context.Context, tokenHash string) (domain.UserSession, error)
-	Rotate(ctx context.Context, oldSessionID uuid.UUID, oldTokenHash string, rotatedAt time.Time, newSession CreateSessionInput) error
+	Rotate(ctx context.Context, oldSessionID uuid.UUID, oldTokenHash string, rotatedAt time.Time, newSession CreateSessionInput) (domain.UserSession, error)
 	RevokeByRefreshTokenHash(ctx context.Context, userID uuid.UUID, tokenHash string, revokedAt time.Time) (bool, error)
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID, revokedAt time.Time) error
+	ListActiveByUserID(ctx context.Context, userID uuid.UUID, now time.Time) ([]domain.UserSession, error)
+	RevokeByID(ctx context.Context, userID, sessionID uuid.UUID, revokedAt time.Time) (bool, error)
 }
 
 type AuthActionTokenRepository interface {
@@ -42,7 +44,7 @@ type AuthActionTokenRepository interface {
 }
 
 type JWTProvider interface {
-	Generate(userID uuid.UUID, email string, role domain.UserRole) (token string, expiresAt time.Time, err error)
+	Generate(userID uuid.UUID, email string, role domain.UserRole, sessionID uuid.UUID) (token string, expiresAt time.Time, err error)
 }
 
 type PasswordProvider interface {
@@ -98,6 +100,11 @@ type RefreshInput struct {
 type LogoutInput struct {
 	UserID       uuid.UUID
 	RefreshToken string
+}
+
+type RevokeSessionInput struct {
+	UserID        uuid.UUID
+	TargetSession uuid.UUID
 }
 
 type VerifyEmailRequestInput struct {
@@ -472,17 +479,18 @@ func (s *AuthService) Refresh(ctx context.Context, input RefreshInput) (domain.T
 		return domain.TokenPair{}, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	if err := s.sessions.Rotate(ctx, session.ID, tokenHash, now, CreateSessionInput{
+	nextSession, err := s.sessions.Rotate(ctx, session.ID, tokenHash, now, CreateSessionInput{
 		UserID:           user.ID,
 		RefreshTokenHash: security.HashToken(newRefreshToken),
 		UserAgent:        normalizeUserAgent(input.UserAgent),
 		IP:               normalizeIP(input.IP),
 		ExpiresAt:        now.Add(s.refreshTTL),
-	}); err != nil {
+	})
+	if err != nil {
 		return domain.TokenPair{}, err
 	}
 
-	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role)
+	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role, nextSession.ID)
 	if err != nil {
 		return domain.TokenPair{}, fmt.Errorf("generate access token: %w", err)
 	}
@@ -491,7 +499,8 @@ func (s *AuthService) Refresh(ctx context.Context, input RefreshInput) (domain.T
 		Action:      "auth.refresh",
 		EntityType:  "session",
 		Metadata: map[string]any{
-			"session_id": session.ID.String(),
+			"session_id":      session.ID.String(),
+			"next_session_id": nextSession.ID.String(),
 		},
 	})
 
@@ -542,6 +551,89 @@ func (s *AuthService) Logout(ctx context.Context, input LogoutInput) error {
 		Metadata: map[string]any{
 			"refresh_token_revoked": true,
 		},
+	})
+	return nil
+}
+
+func (s *AuthService) LogoutAll(ctx context.Context, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		s.recordAudit(ctx, observability.AuditEntry{
+			Action:     "auth.logout_all_failed",
+			EntityType: "session",
+			Metadata: map[string]any{
+				"reason": "invalid_user_id",
+			},
+		})
+		return domain.ErrUnauthorized
+	}
+
+	if err := s.sessions.RevokeAllByUserID(ctx, userID, s.now()); err != nil {
+		return err
+	}
+
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(userID),
+		Action:      "auth.logout_all",
+		EntityType:  "session",
+		Metadata: map[string]any{
+			"all_sessions_revoked": true,
+		},
+	})
+	return nil
+}
+
+func (s *AuthService) Sessions(ctx context.Context, userID, currentSessionID uuid.UUID) ([]domain.UserSession, error) {
+	if userID == uuid.Nil {
+		return nil, domain.ErrUnauthorized
+	}
+
+	sessions, err := s.sessions.ListActiveByUserID(ctx, userID, s.now())
+	if err != nil {
+		return nil, err
+	}
+
+	for index := range sessions {
+		sessions[index].IsCurrent = currentSessionID != uuid.Nil && sessions[index].ID == currentSessionID
+	}
+
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(userID),
+		Action:      "auth.sessions_listed",
+		EntityType:  "session",
+		Metadata: map[string]any{
+			"count": len(sessions),
+		},
+	})
+	return sessions, nil
+}
+
+func (s *AuthService) RevokeSession(ctx context.Context, input RevokeSessionInput) error {
+	if input.UserID == uuid.Nil || input.TargetSession == uuid.Nil {
+		return domain.ErrUnauthorized
+	}
+
+	revoked, err := s.sessions.RevokeByID(ctx, input.UserID, input.TargetSession, s.now())
+	if err != nil {
+		return err
+	}
+	if !revoked {
+		s.recordAudit(ctx, observability.AuditEntry{
+			ActorUserID: ptrUUID(input.UserID),
+			Action:      "auth.session_revoke_failed",
+			EntityType:  "session",
+			EntityID:    ptrUUID(input.TargetSession),
+			Metadata: map[string]any{
+				"reason": "not_found",
+			},
+		})
+		return domain.ErrUnauthorized
+	}
+
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(input.UserID),
+		Action:      "auth.session_revoked",
+		EntityType:  "session",
+		EntityID:    ptrUUID(input.TargetSession),
 	})
 	return nil
 }
@@ -747,17 +839,12 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, input PasswordRe
 func (s *AuthService) issueTokens(ctx context.Context, user domain.User, userAgent, ip string) (*domain.TokenPair, error) {
 	now := s.now()
 
-	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role)
-	if err != nil {
-		return nil, fmt.Errorf("generate access token: %w", err)
-	}
-
 	refreshToken, err := security.GenerateRefreshToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	_, err = s.sessions.Create(ctx, CreateSessionInput{
+	session, err := s.sessions.Create(ctx, CreateSessionInput{
 		UserID:           user.ID,
 		RefreshTokenHash: security.HashToken(refreshToken),
 		UserAgent:        normalizeUserAgent(userAgent),
@@ -766,6 +853,11 @@ func (s *AuthService) issueTokens(ctx context.Context, user domain.User, userAge
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role, session.ID)
+	if err != nil {
+		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
 	return &domain.TokenPair{

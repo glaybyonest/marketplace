@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
 
+import { isCookieAuthMode } from '@/config/auth'
 import { authService } from '@/services/authService'
 import type { ApiError, AuthResponse } from '@/types/api'
 import type { User } from '@/types/domain'
@@ -18,21 +19,24 @@ interface AuthState {
   errorCode: string | null
   notice: string | null
   requiresEmailVerification: boolean
+  sessionBootstrapped: boolean
 }
 
 const initialToken = storage.getAccessToken()
 const initialRefreshToken = storage.getRefreshToken()
+const shouldBootstrapSession = isCookieAuthMode || Boolean(initialToken)
 
 const initialState: AuthState = {
   token: initialToken,
   refreshToken: initialRefreshToken,
   user: null,
-  isAuthenticated: Boolean(initialToken),
+  isAuthenticated: Boolean(initialToken) && !isCookieAuthMode,
   status: 'idle',
   error: null,
   errorCode: null,
   notice: null,
   requiresEmailVerification: false,
+  sessionBootstrapped: !shouldBootstrapSession,
 }
 
 const applySuccessfulAuth = (state: AuthState, payload: AuthResponse<User>) => {
@@ -41,6 +45,7 @@ const applySuccessfulAuth = (state: AuthState, payload: AuthResponse<User>) => {
   state.requiresEmailVerification = payload.requiresEmailVerification
   state.error = null
   state.errorCode = null
+  state.sessionBootstrapped = true
 
   if (payload.token && payload.refreshToken) {
     state.token = payload.token
@@ -52,7 +57,7 @@ const applySuccessfulAuth = (state: AuthState, payload: AuthResponse<User>) => {
 
   state.token = null
   state.refreshToken = null
-  state.isAuthenticated = false
+  state.isAuthenticated = isCookieAuthMode && !payload.requiresEmailVerification && Boolean(payload.user?.id)
   storage.clearTokens()
 }
 
@@ -105,7 +110,11 @@ const authSlice = createSlice({
   reducers: {
     setUser(state, action: { payload: User | null }) {
       state.user = action.payload
-      state.isAuthenticated = Boolean(state.token && action.payload)
+      state.isAuthenticated = isCookieAuthMode ? Boolean(action.payload) : Boolean(state.token && action.payload)
+      state.sessionBootstrapped = true
+    },
+    completeSessionBootstrap(state) {
+      state.sessionBootstrapped = true
     },
     clearAuthFeedback(state) {
       state.error = null
@@ -124,6 +133,7 @@ const authSlice = createSlice({
       state.errorCode = null
       state.notice = null
       state.requiresEmailVerification = false
+      state.sessionBootstrapped = true
     },
   },
   extraReducers: (builder) => {
@@ -164,6 +174,7 @@ const authSlice = createSlice({
         state.errorCode = null
         state.notice = null
         state.requiresEmailVerification = false
+        state.sessionBootstrapped = true
         storage.clearTokens()
       })
       .addCase(logoutThunk.rejected, (state, action) => {
@@ -175,10 +186,11 @@ const authSlice = createSlice({
         state.isAuthenticated = false
         state.notice = null
         state.requiresEmailVerification = false
+        state.sessionBootstrapped = true
         storage.clearTokens()
       })
   },
 })
 
-export const { setUser, clearAuthFeedback, forceLogout } = authSlice.actions
+export const { setUser, completeSessionBootstrap, clearAuthFeedback, forceLogout } = authSlice.actions
 export default authSlice.reducer

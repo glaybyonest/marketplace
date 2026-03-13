@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 
+import { AUTH_CSRF_HEADER_NAME, isCookieAuthMode } from '@/config/auth'
 import { storage } from '@/utils/storage'
 
 export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized'
@@ -17,6 +18,13 @@ const isAuthEndpoint = (url?: string) => {
 type RetryableConfig = InternalAxiosRequestConfig & {
   _retry?: boolean
   skipAuthRefresh?: boolean
+}
+
+const COOKIE_REFRESH_SENTINEL = '__cookie_refresh__'
+
+const isUnsafeMethod = (method?: string) => {
+  const normalized = (method ?? 'get').toUpperCase()
+  return normalized !== 'GET' && normalized !== 'HEAD' && normalized !== 'OPTIONS'
 }
 
 const parseRefreshTokenPair = (raw: unknown): { accessToken: string; refreshToken: string } | null => {
@@ -41,12 +49,17 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
 
   refreshPromise = (async () => {
-    const refreshToken = storage.getRefreshToken()
-    if (!refreshToken) {
-      return null
-    }
-
     try {
+      if (isCookieAuthMode) {
+        await apiClient.post('/v1/auth/refresh', undefined, { skipAuthRefresh: true } as RetryableConfig)
+        return COOKIE_REFRESH_SENTINEL
+      }
+
+      const refreshToken = storage.getRefreshToken()
+      if (!refreshToken) {
+        return null
+      }
+
       const response = await apiClient.post(
         '/v1/auth/refresh',
         { refresh_token: refreshToken },
@@ -73,11 +86,24 @@ const refreshAccessToken = async (): Promise<string | null> => {
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: isCookieAuthMode,
 })
 
 apiClient.interceptors.request.use((config) => {
-  const token = storage.getAccessToken()
+  if (isCookieAuthMode) {
+    if (isUnsafeMethod(config.method)) {
+      const csrfToken = storage.getCSRFToken()
+      if (csrfToken) {
+        if (!config.headers) {
+          config.headers = {} as RetryableConfig['headers']
+        }
+        config.headers[AUTH_CSRF_HEADER_NAME] = csrfToken
+      }
+    }
+    return config
+  }
 
+  const token = storage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -108,6 +134,10 @@ apiClient.interceptors.response.use(
       return Promise.reject(error)
     }
 
+    if (isCookieAuthMode) {
+      return apiClient.request(originalRequest)
+    }
+
     if (!originalRequest.headers) {
       originalRequest.headers = {} as RetryableConfig['headers']
     }
@@ -115,4 +145,3 @@ apiClient.interceptors.response.use(
     return apiClient.request(originalRequest)
   },
 )
-

@@ -4,6 +4,7 @@ import type { AuthResponse } from '@/types/api'
 import type { User } from '@/types/domain'
 import { normalizeUser } from '@/utils/normalize'
 import { storage } from '@/utils/storage'
+import { isCookieAuthMode } from '@/config/auth'
 
 interface Credentials {
   email: string
@@ -27,8 +28,10 @@ const normalizeAuthResponse = (raw: unknown): AuthResponse<User> => {
   const source = (pickData<Record<string, unknown>>(raw) ?? {}) as Record<string, unknown>
   const tokens = (source.tokens ?? {}) as Record<string, unknown>
 
-  const token = typeof tokens.access_token === 'string' ? tokens.access_token : null
-  const refreshToken = typeof tokens.refresh_token === 'string' ? tokens.refresh_token : null
+  const token =
+    typeof tokens.access_token === 'string' && tokens.access_token.trim().length > 0 ? tokens.access_token : null
+  const refreshToken =
+    typeof tokens.refresh_token === 'string' && tokens.refresh_token.trim().length > 0 ? tokens.refresh_token : null
   const tokenType = typeof tokens.token_type === 'string' ? tokens.token_type : null
   const expiresIn = Number(tokens.expires_in ?? 0) || 0
   const user = normalizeUser(source.user ?? source.profile ?? {})
@@ -84,6 +87,11 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
+    if (isCookieAuthMode) {
+      await apiClient.post('/v1/auth/logout')
+      return
+    }
+
     const refreshToken = storage.getRefreshToken()
     if (!refreshToken) {
       return

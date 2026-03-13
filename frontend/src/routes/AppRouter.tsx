@@ -17,6 +17,7 @@ import { PlacesPage } from '@/pages/PlacesPage'
 import { ProductPage } from '@/pages/ProductPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
+import { SessionsPage } from '@/pages/SessionsPage'
 import { VerifyEmailPage } from '@/pages/VerifyEmailPage'
 
 export const AppRouter = () => (
@@ -36,6 +37,7 @@ export const AppRouter = () => (
       <Route path="/favorites" element={<FavoritesPage />} />
       <Route path="/account/orders" element={<OrdersPage />} />
       <Route path="/account/places" element={<PlacesPage />} />
+      <Route path="/account/sessions" element={<SessionsPage />} />
     </Route>
 
     <Route element={<ProtectedRoute requiredRole="admin" />}>

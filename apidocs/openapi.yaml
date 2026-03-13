@@ -144,6 +144,9 @@ paths:
       tags: [Auth]
       operationId: login
       summary: Login with email and password
+      description: >
+        Returns the authenticated user and, in bearer mode, an access/refresh token pair.
+        When `AUTH_COOKIE_MODE=true`, the backend also sets httpOnly auth cookies and the token fields may be blank.
       requestBody:
         required: true
         content:
@@ -209,8 +212,13 @@ paths:
       tags: [Auth]
       operationId: refreshTokens
       summary: Rotate refresh token and obtain a new token pair
+      description: >
+        Accepts `refresh_token` in the JSON body for bearer mode. In cookie mode, the refresh token can be read from
+        the `mp_refresh_token` cookie and mutating requests must send `X-CSRF-Token`.
+      parameters:
+        - $ref: '#/components/parameters/CSRFHeader'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -228,6 +236,8 @@ paths:
                 $ref: '#/components/schemas/TokenPairEnvelope'
         '400':
           $ref: '#/components/responses/InvalidInputResponse'
+        '403':
+          $ref: '#/components/responses/CSRFInvalidResponse'
         '401':
           $ref: '#/components/responses/RefreshUnauthorizedResponse'
         '429':
@@ -358,8 +368,14 @@ paths:
       summary: Revoke a refresh token for the current user
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      description: >
+        Revokes the current refresh session. In bearer mode the request body should contain `refresh_token`.
+        In cookie mode the refresh token can be taken from the auth cookie and the request must include `X-CSRF-Token`.
+      parameters:
+        - $ref: '#/components/parameters/CSRFHeader'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -373,6 +389,31 @@ paths:
                 $ref: '#/components/schemas/RevokedEnvelope'
         '400':
           $ref: '#/components/responses/InvalidInputResponse'
+        '403':
+          $ref: '#/components/responses/CSRFInvalidResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /api/v1/auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      summary: Revoke all refresh sessions for the current user
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFHeader'
+      responses:
+        '200':
+          description: All refresh sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokedAllEnvelope'
+        '403':
+          $ref: '#/components/responses/CSRFInvalidResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedResponse'
         '500':
@@ -384,6 +425,7 @@ paths:
       summary: Get the current authenticated user
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Current user profile
@@ -427,6 +469,51 @@ paths:
                 $ref: '#/components/schemas/CategoryEnvelope'
         '404':
           $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /api/v1/auth/sessions:
+    get:
+      tags: [Auth]
+      operationId: listSessions
+      summary: List active refresh sessions for the current user
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Active refresh sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSessionListEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /api/v1/auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      operationId: revokeSession
+      summary: Revoke a specific refresh session for the current user
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionIDPathParam'
+        - $ref: '#/components/parameters/CSRFHeader'
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokedEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidInputResponse'
+        '403':
+          $ref: '#/components/responses/CSRFInvalidResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
   /api/v1/categories/{id}:
@@ -1316,6 +1403,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: mp_access_token
   headers:
     RetryAfterHeader:
       description: Number of seconds until the client may retry the request.
@@ -1436,6 +1527,15 @@ components:
         maximum: 20
         default: 6
       example: 6
+    CSRFHeader:
+      name: X-CSRF-Token
+      in: header
+      description: Required for mutating requests when cookie auth mode is enabled.
+      required: false
+      schema:
+        type: string
+        minLength: 20
+      example: csrf_1f9f7b7c92a14c8fb6debdfe94eebfef
     RecommendationsLimitParam:
       name: limit
       in: query
@@ -1493,6 +1593,14 @@ components:
         type: string
         format: uuid
       example: 9ca2b8bc-f925-4df5-9880-34b310ae2f67
+    SessionIDPathParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 4d019535-6f30-4dc9-a96f-0647d14318c1
   responses:
     InvalidInputResponse:
       description: Invalid request payload or malformed parameters
@@ -1559,6 +1667,18 @@ components:
                 error:
                   code: refresh_token_reused
                   message: refresh token already used
+    CSRFInvalidResponse:
+      description: Missing or invalid CSRF token for cookie-authenticated mutation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            csrfInvalid:
+              value:
+                error:
+                  code: csrf_invalid
+                  message: invalid csrf token
     EmailNotVerifiedResponse:
       description: User email must be verified before login or protected access
       content:
@@ -1837,6 +1957,39 @@ components:
           type: string
           format: date-time
           example: '2026-03-13T18:15:00Z'
+    UserSession:
+      type: object
+      required: [id, user_id, created_at, last_seen_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 4d019535-6f30-4dc9-a96f-0647d14318c1
+        user_id:
+          type: string
+          format: uuid
+          example: 7d4c4e98-42ba-4f55-86db-9f3d2772e6c1
+        user_agent:
+          type: string
+          example: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0
+        ip:
+          type: string
+          example: 127.0.0.1
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-03-13T18:15:00Z'
+        last_seen_at:
+          type: string
+          format: date-time
+          example: '2026-03-13T18:29:00Z'
+        expires_at:
+          type: string
+          format: date-time
+          example: '2026-04-12T18:15:00Z'
+        is_current:
+          type: boolean
+          example: true
     TokenPair:
       type: object
       required: [access_token, refresh_token, token_type, expires_in]
@@ -1874,6 +2027,14 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/User'
+    UserSessionListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSession'
     AuthResultEnvelope:
       type: object
       required: [data]
@@ -1906,6 +2067,17 @@ components:
           required: [revoked]
           properties:
             revoked:
+              type: boolean
+              example: true
+    RevokedAllEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [revoked_all]
+          properties:
+            revoked_all:
               type: boolean
               example: true
     VerifyEmailEnvelope:

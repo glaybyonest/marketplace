@@ -74,6 +74,8 @@ func DescribeDomainError(err error) DomainErrorDescriptor {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
 		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "invalid_input", Message: "invalid input"}
+	case errors.Is(err, domain.ErrCSRFInvalid):
+		return DomainErrorDescriptor{Status: http.StatusForbidden, Code: "csrf_invalid", Message: "invalid csrf token"}
 	case errors.Is(err, domain.ErrCartEmpty):
 		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "cart_empty", Message: "cart is empty"}
 	case errors.Is(err, domain.ErrUnauthorized):

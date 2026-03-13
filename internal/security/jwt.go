@@ -12,8 +12,9 @@ import (
 
 // AccessClaims contains JWT claims used by access tokens.
 type AccessClaims struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	SessionID string `json:"session_id"`
 	jwt.RegisteredClaims
 }
 
@@ -30,12 +31,13 @@ func NewJWTManager(secret string, ttl time.Duration) *JWTManager {
 	}
 }
 
-func (m *JWTManager) Generate(userID uuid.UUID, email string, role domain.UserRole) (string, time.Time, error) {
+func (m *JWTManager) Generate(userID uuid.UUID, email string, role domain.UserRole, sessionID uuid.UUID) (string, time.Time, error) {
 	now := time.Now().UTC()
 	expiresAt := now.Add(m.ttl)
 	claims := AccessClaims{
-		Email: email,
-		Role:  string(role),
+		Email:     email,
+		Role:      string(role),
+		SessionID: sessionID.String(),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -75,4 +77,12 @@ func UserIDFromClaims(claims *AccessClaims) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("parse sub claim: %w", err)
 	}
 	return userID, nil
+}
+
+func SessionIDFromClaims(claims *AccessClaims) (uuid.UUID, error) {
+	sessionID, err := uuid.Parse(claims.SessionID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("parse session_id claim: %w", err)
+	}
+	return sessionID, nil
 }

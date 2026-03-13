@@ -3,9 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/response"
@@ -30,10 +33,30 @@ func decodeAndValidate(r *http.Request, dst any, validate *validator.Validate) e
 	return nil
 }
 
+func decodeOptional(r *http.Request, dst any) error {
+	if r == nil || r.Body == nil {
+		return nil
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return domain.ErrInvalidInput
+	}
+	if decoder.More() {
+		return domain.ErrInvalidInput
+	}
+	return nil
+}
+
 func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 	if err == nil {
 		return
 	}
+	applyErrorHeaders(w, err)
 	descriptor := response.DescribeDomainError(err)
 	if descriptor.Status >= http.StatusInternalServerError {
 		if reporter, ok := observability.ErrorReporterFromContext(r.Context()); ok && reporter != nil {
@@ -49,6 +72,19 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		}
 	}
 	response.Error(w, descriptor.Status, descriptor.Code, descriptor.Message, descriptor.Details)
+}
+
+func applyErrorHeaders(w http.ResponseWriter, err error) {
+	var rateLimitErr *domain.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(rateLimitErr.RetryAfter)))
+		return
+	}
+
+	var loginLockedErr *domain.LoginLockedError
+	if errors.As(err, &loginLockedErr) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(loginLockedErr.RetryAfter)))
+	}
 }
 
 func getClientIP(r *http.Request) string {
@@ -80,4 +116,18 @@ func handlerRoutePattern(r *http.Request) string {
 		return "/"
 	}
 	return r.URL.Path
+}
+
+func retryAfterSeconds(delay time.Duration) int {
+	if delay <= 0 {
+		return 1
+	}
+	seconds := int(delay / time.Second)
+	if delay%time.Second != 0 {
+		seconds++
+	}
+	if seconds <= 0 {
+		return 1
+	}
+	return seconds
 }

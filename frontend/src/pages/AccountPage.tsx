@@ -64,6 +64,7 @@ export const AccountPage = () => {
           <Link to="/account/orders">Orders</Link>
           <Link to="/favorites">Favorites</Link>
           <Link to="/account/places">My places</Link>
+          <Link to="/account/sessions">Sessions</Link>
           {authUser?.role === 'admin' ? <Link to="/admin">Admin</Link> : null}
         </nav>
       </section>

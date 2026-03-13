@@ -176,6 +176,7 @@ func (m *authSessionRepoMock) Create(ctx context.Context, input CreateSessionInp
 		UserAgent:        input.UserAgent,
 		IP:               input.IP,
 		CreatedAt:        m.state.now(),
+		LastSeenAt:       m.state.now(),
 		ExpiresAt:        input.ExpiresAt,
 	}
 	m.state.sessions[input.RefreshTokenHash] = session
@@ -193,21 +194,21 @@ func (m *authSessionRepoMock) GetByRefreshTokenHash(ctx context.Context, tokenHa
 	return session, nil
 }
 
-func (m *authSessionRepoMock) Rotate(ctx context.Context, oldSessionID uuid.UUID, oldTokenHash string, rotatedAt time.Time, newSession CreateSessionInput) error {
+func (m *authSessionRepoMock) Rotate(ctx context.Context, oldSessionID uuid.UUID, oldTokenHash string, rotatedAt time.Time, newSession CreateSessionInput) (domain.UserSession, error) {
 	if m.force != nil {
-		return m.force
+		return domain.UserSession{}, m.force
 	}
 	session, ok := m.state.sessions[oldTokenHash]
 	if !ok || session.ID != oldSessionID {
-		return domain.ErrNotFound
+		return domain.UserSession{}, domain.ErrNotFound
 	}
 	if session.RotatedAt != nil || session.RevokedAt != nil {
-		return domain.ErrTokenReused
+		return domain.UserSession{}, domain.ErrTokenReused
 	}
 	session.RotatedAt = &rotatedAt
 	m.state.sessions[oldTokenHash] = session
-	_, err := m.Create(ctx, newSession)
-	return err
+	created, err := m.Create(ctx, newSession)
+	return created, err
 }
 
 func (m *authSessionRepoMock) RevokeByRefreshTokenHash(ctx context.Context, userID uuid.UUID, tokenHash string, revokedAt time.Time) (bool, error) {
@@ -234,6 +235,35 @@ func (m *authSessionRepoMock) RevokeAllByUserID(ctx context.Context, userID uuid
 		}
 	}
 	return nil
+}
+
+func (m *authSessionRepoMock) ListActiveByUserID(ctx context.Context, userID uuid.UUID, now time.Time) ([]domain.UserSession, error) {
+	if m.force != nil {
+		return nil, m.force
+	}
+
+	items := make([]domain.UserSession, 0)
+	for _, session := range m.state.sessions {
+		if session.UserID != userID || session.RevokedAt != nil || !session.ExpiresAt.After(now) {
+			continue
+		}
+		items = append(items, session)
+	}
+	return items, nil
+}
+
+func (m *authSessionRepoMock) RevokeByID(ctx context.Context, userID, sessionID uuid.UUID, revokedAt time.Time) (bool, error) {
+	if m.force != nil {
+		return false, m.force
+	}
+	for key, session := range m.state.sessions {
+		if session.UserID == userID && session.ID == sessionID && session.RevokedAt == nil {
+			session.RevokedAt = &revokedAt
+			m.state.sessions[key] = session
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 type authActionTokenRepoMock struct {
@@ -322,12 +352,12 @@ type jwtMock struct {
 	fail error
 }
 
-func (j *jwtMock) Generate(userID uuid.UUID, email string, role domain.UserRole) (string, time.Time, error) {
+func (j *jwtMock) Generate(userID uuid.UUID, email string, role domain.UserRole, sessionID uuid.UUID) (string, time.Time, error) {
 	if j.fail != nil {
 		return "", time.Time{}, j.fail
 	}
 	now := time.Now().UTC()
-	return "access-" + userID.String() + "-" + string(role), now.Add(15 * time.Minute), nil
+	return "access-" + userID.String() + "-" + sessionID.String() + "-" + string(role), now.Add(15 * time.Minute), nil
 }
 
 func extractActionToken(t *testing.T, messages []mailer.Message, subject string) string {

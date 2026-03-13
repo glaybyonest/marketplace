@@ -38,9 +38,11 @@ type UserSession struct {
 	UserAgent        string     `json:"user_agent,omitempty"`
 	IP               string     `json:"ip,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
+	LastSeenAt       time.Time  `json:"last_seen_at"`
 	ExpiresAt        time.Time  `json:"expires_at"`
 	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
 	RotatedAt        *time.Time `json:"rotated_at,omitempty"`
+	IsCurrent        bool       `json:"is_current,omitempty"`
 }
 
 // TokenPair is returned after authentication operations.

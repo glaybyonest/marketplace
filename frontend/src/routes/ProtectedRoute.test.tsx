@@ -34,6 +34,7 @@ const createTestStore = (isAuthenticated: boolean, role: UserRole = 'customer') 
     errorCode: null,
     notice: null,
     requiresEmailVerification: false,
+    sessionBootstrapped: true,
   }
 
   return configureStore({

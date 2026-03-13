@@ -36,6 +36,11 @@ type Config struct {
 	AuthPasswordResetRateWindow   time.Duration
 	AuthVerifyEmailRateLimit      int
 	AuthVerifyEmailRateWindow     time.Duration
+	AuthCookieMode                bool
+	AuthCookieSecure              bool
+	AuthCookieDomain              string
+	AuthCookieSameSite            string
+	AuthCSRFEnabled               bool
 	LogLevel                      string
 	ReadTimeout                   time.Duration
 	WriteTimeout                  time.Duration
@@ -77,6 +82,11 @@ type rawConfig struct {
 	AuthPasswordResetRateWindow   string `validate:"required"`
 	AuthVerifyEmailRateLimit      int    `validate:"required,min=1,max=1000"`
 	AuthVerifyEmailRateWindow     string `validate:"required"`
+	AuthCookieMode                bool
+	AuthCookieSecure              bool
+	AuthCookieDomain              string
+	AuthCookieSameSite            string `validate:"required,oneof=lax strict none"`
+	AuthCSRFEnabled               bool
 	AdminEmails                   string
 	LogLevel                      string `validate:"required,oneof=debug info warn error"`
 	ReadTimeout                   string `validate:"required"`
@@ -122,6 +132,11 @@ func Load() (Config, error) {
 		AuthPasswordResetRateWindow:   env("AUTH_RATE_LIMIT_PASSWORD_RESET_WINDOW", "15m"),
 		AuthVerifyEmailRateLimit:      envInt("AUTH_RATE_LIMIT_VERIFY_EMAIL", 5),
 		AuthVerifyEmailRateWindow:     env("AUTH_RATE_LIMIT_VERIFY_EMAIL_WINDOW", "15m"),
+		AuthCookieMode:                envBool("AUTH_COOKIE_MODE", false),
+		AuthCookieSecure:              envBool("AUTH_COOKIE_SECURE", false),
+		AuthCookieDomain:              env("AUTH_COOKIE_DOMAIN", ""),
+		AuthCookieSameSite:            strings.ToLower(env("AUTH_COOKIE_SAME_SITE", "lax")),
+		AuthCSRFEnabled:               envBool("AUTH_CSRF_ENABLED", true),
 		LogLevel:                      strings.ToLower(env("LOG_LEVEL", "info")),
 		ReadTimeout:                   env("HTTP_READ_TIMEOUT", "10s"),
 		WriteTimeout:                  env("HTTP_WRITE_TIMEOUT", "15s"),
@@ -266,6 +281,11 @@ func Load() (Config, error) {
 		AuthPasswordResetRateWindow:   authPasswordResetRateWindow,
 		AuthVerifyEmailRateLimit:      raw.AuthVerifyEmailRateLimit,
 		AuthVerifyEmailRateWindow:     authVerifyEmailRateWindow,
+		AuthCookieMode:                raw.AuthCookieMode,
+		AuthCookieSecure:              raw.AuthCookieSecure,
+		AuthCookieDomain:              strings.TrimSpace(raw.AuthCookieDomain),
+		AuthCookieSameSite:            raw.AuthCookieSameSite,
+		AuthCSRFEnabled:               raw.AuthCSRFEnabled,
 		LogLevel:                      raw.LogLevel,
 		ReadTimeout:                   readTimeout,
 		WriteTimeout:                  writeTimeout,

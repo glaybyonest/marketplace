@@ -68,6 +68,14 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	auditLogger := observability.NewAuditLogger(logger, metrics, auditLogRepo)
 	errorReporter := observability.NewErrorReporter(logger, metrics, errorEventRepo)
 	rateLimiter := httpmw.NewRateLimiter(auditLogger)
+	cookieConfig := security.NewCookieAuthConfig(
+		cfg.AuthCookieMode,
+		cfg.AuthCookieSecure,
+		cfg.AuthCookieDomain,
+		cfg.AuthCookieSameSite,
+		cfg.AccessTokenTTL,
+		cfg.RefreshTokenTTL,
+	)
 
 	if err := userRepo.PromoteAdminsByEmail(ctx, cfg.AdminEmails); err != nil {
 		db.Close()
@@ -126,9 +134,11 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		Logger:                 logger,
 		DB:                     db,
 		Metrics:                metrics,
+		AuditLogger:            auditLogger,
 		ErrorReporter:          errorReporter,
 		RateLimiter:            rateLimiter,
 		JWTManager:             jwtManager,
+		SessionToucher:         sessionRepo,
 		AuthService:            authService,
 		AdminService:           adminService,
 		CatalogService:         catalogService,
@@ -164,6 +174,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 				Limit:  cfg.AuthVerifyEmailRateLimit,
 				Window: cfg.AuthVerifyEmailRateWindow,
 			},
+			CookieAuth:  cookieConfig,
+			CSRFEnabled: cfg.AuthCSRFEnabled,
 		},
 	})
 

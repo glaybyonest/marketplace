@@ -21,9 +21,11 @@ type Dependencies struct {
 	Logger                 *slog.Logger
 	DB                     *pgxpool.Pool
 	Metrics                *observability.Metrics
+	AuditLogger            *observability.AuditLogger
 	ErrorReporter          *observability.ErrorReporter
 	RateLimiter            *httpmw.RateLimiter
 	JWTManager             *security.JWTManager
+	SessionToucher         httpmw.SessionToucher
 	AuthService            *usecase.AuthService
 	AdminService           *usecase.AdminService
 	CatalogService         *usecase.CatalogService
@@ -42,6 +44,8 @@ type SecurityConfig struct {
 	RefreshRatePolicy       httpmw.RateLimitPolicy
 	PasswordResetRatePolicy httpmw.RateLimitPolicy
 	VerifyEmailRatePolicy   httpmw.RateLimitPolicy
+	CookieAuth              security.CookieAuthConfig
+	CSRFEnabled             bool
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -54,9 +58,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Use(httpmw.Logger(deps.Logger))
 	router.Use(httpmw.Recoverer(deps.Logger, deps.ErrorReporter))
 
-	authMiddleware := httpmw.NewAuth(deps.JWTManager)
+	authMiddleware := httpmw.NewAuth(deps.JWTManager, deps.Security.CookieAuth, deps.SessionToucher)
+	csrfMiddleware := httpmw.NewCSRF(deps.Security.CSRFEnabled, deps.Security.CookieAuth, deps.AuditLogger)
 
-	authHandler := handlers.NewAuthHandler(deps.AuthService)
+	authHandler := handlers.NewAuthHandler(deps.AuthService, deps.Security.CookieAuth)
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	catalogHandler := handlers.NewCatalogHandler(deps.CatalogService)
 	cartHandler := handlers.NewCartHandler(deps.CartService)
@@ -87,7 +92,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			r.With(deps.RateLimiter.Middleware(deps.Security.RegisterRatePolicy)).Post("/register", authHandler.Register)
 			r.With(deps.RateLimiter.Middleware(deps.Security.LoginRatePolicy)).Post("/login", authHandler.Login)
-			r.With(deps.RateLimiter.Middleware(deps.Security.RefreshRatePolicy)).Post("/refresh", authHandler.Refresh)
+			r.With(deps.RateLimiter.Middleware(deps.Security.RefreshRatePolicy), csrfMiddleware.Handler).Post("/refresh", authHandler.Refresh)
 			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/request", authHandler.RequestEmailVerification)
 			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/confirm", authHandler.ConfirmEmailVerification)
 			r.With(deps.RateLimiter.Middleware(deps.Security.PasswordResetRatePolicy)).Post("/password-reset/request", authHandler.RequestPasswordReset)
@@ -95,8 +100,12 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.Handler)
+				r.Use(csrfMiddleware.Handler)
 				r.Post("/logout", authHandler.Logout)
+				r.Post("/logout-all", authHandler.LogoutAll)
 				r.Get("/me", authHandler.Me)
+				r.Get("/sessions", authHandler.Sessions)
+				r.Delete("/sessions/{id}", authHandler.RevokeSession)
 			})
 		})
 
@@ -113,6 +122,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.Handler)
+			r.Use(csrfMiddleware.Handler)
 
 			r.Get("/profile", profileHandler.Get)
 			r.Patch("/profile", profileHandler.Update)
@@ -141,6 +151,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(authMiddleware.Handler)
+			r.Use(csrfMiddleware.Handler)
 			r.Use(httpmw.RequireRole(domain.UserRoleAdmin))
 
 			r.Get("/categories", adminHandler.CategoriesList)
