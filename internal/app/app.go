@@ -9,6 +9,7 @@ import (
 	"time"
 
 	httpapi "marketplace-backend/internal/http"
+	httpmw "marketplace-backend/internal/http/middleware"
 	"marketplace-backend/internal/jobs"
 	"marketplace-backend/internal/mailer"
 	"marketplace-backend/internal/observability"
@@ -66,6 +67,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	metrics := observability.NewMetrics(db)
 	auditLogger := observability.NewAuditLogger(logger, metrics, auditLogRepo)
 	errorReporter := observability.NewErrorReporter(logger, metrics, errorEventRepo)
+	rateLimiter := httpmw.NewRateLimiter(auditLogger)
 
 	if err := userRepo.PromoteAdminsByEmail(ctx, cfg.AdminEmails); err != nil {
 		db.Close()
@@ -86,6 +88,9 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		cfg.RefreshTokenTTL,
 		cfg.EmailVerifyTTL,
 		cfg.PasswordResetTTL,
+		cfg.LoginFailureWindow,
+		cfg.LoginMaxAttempts,
+		cfg.LoginLockoutDuration,
 	)
 	adminService := usecase.NewAdminService(categoryRepo, productRepo, auditLogger)
 	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
@@ -122,6 +127,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		DB:                     db,
 		Metrics:                metrics,
 		ErrorReporter:          errorReporter,
+		RateLimiter:            rateLimiter,
 		JWTManager:             jwtManager,
 		AuthService:            authService,
 		AdminService:           adminService,
@@ -132,6 +138,33 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		FavoritesService:       favoritesService,
 		PlacesService:          placesService,
 		RecommendationsService: recommendationsService,
+		Security: httpapi.SecurityConfig{
+			RegisterRatePolicy: httpmw.RateLimitPolicy{
+				Name:   "auth_register",
+				Limit:  cfg.AuthRegisterRateLimit,
+				Window: cfg.AuthRegisterRateWindow,
+			},
+			LoginRatePolicy: httpmw.RateLimitPolicy{
+				Name:   "auth_login",
+				Limit:  cfg.AuthLoginRateLimit,
+				Window: cfg.AuthLoginRateWindow,
+			},
+			RefreshRatePolicy: httpmw.RateLimitPolicy{
+				Name:   "auth_refresh",
+				Limit:  cfg.AuthRefreshRateLimit,
+				Window: cfg.AuthRefreshRateWindow,
+			},
+			PasswordResetRatePolicy: httpmw.RateLimitPolicy{
+				Name:   "auth_password_reset",
+				Limit:  cfg.AuthPasswordResetRateLimit,
+				Window: cfg.AuthPasswordResetRateWindow,
+			},
+			VerifyEmailRatePolicy: httpmw.RateLimitPolicy{
+				Name:   "auth_verify_email",
+				Limit:  cfg.AuthVerifyEmailRateLimit,
+				Window: cfg.AuthVerifyEmailRateWindow,
+			},
+		},
 	})
 
 	server := &http.Server{

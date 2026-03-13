@@ -111,6 +111,52 @@ func (m *authUserRepoMock) MarkEmailVerified(ctx context.Context, id uuid.UUID, 
 	return user, nil
 }
 
+func (m *authUserRepoMock) RegisterFailedLogin(
+	ctx context.Context,
+	id uuid.UUID,
+	failedAt time.Time,
+	window time.Duration,
+	maxAttempts int,
+	lockoutDuration time.Duration,
+) (domain.User, error) {
+	if m.force != nil {
+		return domain.User{}, m.force
+	}
+	user, ok := m.state.users[id]
+	if !ok {
+		return domain.User{}, domain.ErrNotFound
+	}
+	if user.LastFailedLoginAt == nil || !user.LastFailedLoginAt.After(failedAt.Add(-window)) {
+		user.FailedLoginAttempts = 1
+	} else {
+		user.FailedLoginAttempts++
+	}
+	user.LastFailedLoginAt = &failedAt
+	if user.FailedLoginAttempts >= maxAttempts {
+		lockedUntil := failedAt.Add(lockoutDuration)
+		user.LockedUntil = &lockedUntil
+	}
+	user.UpdatedAt = m.state.now()
+	m.state.users[id] = user
+	return user, nil
+}
+
+func (m *authUserRepoMock) ClearFailedLogin(ctx context.Context, id uuid.UUID) error {
+	if m.force != nil {
+		return m.force
+	}
+	user, ok := m.state.users[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	user.FailedLoginAttempts = 0
+	user.LastFailedLoginAt = nil
+	user.LockedUntil = nil
+	user.UpdatedAt = m.state.now()
+	m.state.users[id] = user
+	return nil
+}
+
 type authSessionRepoMock struct {
 	state *authState
 	force error
@@ -339,6 +385,9 @@ func TestAuthService(t *testing.T) {
 		30*24*time.Hour,
 		24*time.Hour,
 		time.Hour,
+		15*time.Minute,
+		5,
+		15*time.Minute,
 	)
 	service.now = state.now
 
@@ -404,6 +453,53 @@ func TestAuthService(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.Equal(t, "auth.login_failed", state.auditEntries[len(state.auditEntries)-1].Action)
+	})
+
+	t.Run("login lockout activates after repeated failures", func(t *testing.T) {
+		userID := state.byEmail["user@example.com"]
+		user := state.users[userID]
+		user.FailedLoginAttempts = 0
+		user.LastFailedLoginAt = nil
+		user.LockedUntil = nil
+		state.users[userID] = user
+
+		for i := 0; i < 4; i++ {
+			_, err := service.Login(context.Background(), LoginInput{
+				Email:    "user@example.com",
+				Password: "WrongPass9",
+			})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, domain.ErrUnauthorized)
+		}
+
+		_, err := service.Login(context.Background(), LoginInput{
+			Email:    "user@example.com",
+			Password: "WrongPass9",
+		})
+		require.Error(t, err)
+		var lockErr *domain.LoginLockedError
+		require.ErrorAs(t, err, &lockErr)
+		assert.Equal(t, "auth.login_lockout_triggered", state.auditEntries[len(state.auditEntries)-1].Action)
+
+		_, err = service.Login(context.Background(), LoginInput{
+			Email:    "user@example.com",
+			Password: "StrongPass1",
+		})
+		require.Error(t, err)
+		require.ErrorAs(t, err, &lockErr)
+		assert.Equal(t, "auth.login_locked", state.auditEntries[len(state.auditEntries)-1].Action)
+
+		now = now.Add(16 * time.Minute)
+		result, err := service.Login(context.Background(), LoginInput{
+			Email:    "user@example.com",
+			Password: "StrongPass1",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result.Tokens)
+
+		user = state.users[userID]
+		assert.Zero(t, user.FailedLoginAttempts)
+		assert.Nil(t, user.LockedUntil)
 	})
 
 	t.Run("request verification resend is generic", func(t *testing.T) {

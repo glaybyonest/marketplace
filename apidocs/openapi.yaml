@@ -133,6 +133,8 @@ paths:
                       message: verification email sent
         '400':
           $ref: '#/components/responses/InvalidInputResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '409':
           $ref: '#/components/responses/ConflictResponse'
         '500':
@@ -186,6 +188,20 @@ paths:
           $ref: '#/components/responses/UnauthorizedResponse'
         '403':
           $ref: '#/components/responses/EmailNotVerifiedResponse'
+        '429':
+          description: Login endpoint is rate-limited or the account is temporarily locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                rateLimited:
+                  $ref: '#/components/examples/RateLimitedExample'
+                loginLocked:
+                  $ref: '#/components/examples/LoginLockedExample'
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfterHeader'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
   /api/v1/auth/refresh:
@@ -214,6 +230,8 @@ paths:
           $ref: '#/components/responses/InvalidInputResponse'
         '401':
           $ref: '#/components/responses/RefreshUnauthorizedResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
   /api/v1/auth/verify-email/request:
@@ -240,6 +258,8 @@ paths:
                 $ref: '#/components/schemas/AcceptedEnvelope'
         '400':
           $ref: '#/components/responses/InvalidInputResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
   /api/v1/auth/verify-email/confirm:
@@ -266,6 +286,8 @@ paths:
                 $ref: '#/components/schemas/VerifyEmailEnvelope'
         '400':
           $ref: '#/components/responses/InvalidTokenResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '404':
           $ref: '#/components/responses/NotFoundResponse'
         '500':
@@ -294,6 +316,8 @@ paths:
                 $ref: '#/components/schemas/AcceptedEnvelope'
         '400':
           $ref: '#/components/responses/InvalidInputResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
   /api/v1/auth/password-reset/confirm:
@@ -321,6 +345,8 @@ paths:
                 $ref: '#/components/schemas/PasswordResetEnvelope'
         '400':
           $ref: '#/components/responses/InvalidTokenResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '404':
           $ref: '#/components/responses/NotFoundResponse'
         '500':
@@ -1290,6 +1316,30 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  headers:
+    RetryAfterHeader:
+      description: Number of seconds until the client may retry the request.
+      schema:
+        type: integer
+        minimum: 1
+        example: 60
+  examples:
+    RateLimitedExample:
+      value:
+        error:
+          code: rate_limited
+          message: too many requests
+          details:
+            scope: auth_login
+            retry_after_seconds: 60
+    LoginLockedExample:
+      value:
+        error:
+          code: login_locked
+          message: account is temporarily locked
+          details:
+            retry_after_seconds: 900
+            locked_until: '2026-03-13T18:30:00Z'
   parameters:
     SearchQueryParam:
       name: q
@@ -1456,6 +1506,18 @@ components:
                 error:
                   code: invalid_input
                   message: invalid input
+    RateLimitedResponse:
+      description: Too many requests for the same endpoint from the same client.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfterHeader'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            rateLimited:
+              $ref: '#/components/examples/RateLimitedExample'
     InvalidTokenResponse:
       description: Invalid, expired, or already consumed token
       content:

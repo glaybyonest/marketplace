@@ -15,16 +15,19 @@ const (
 
 // User is a registered account.
 type User struct {
-	ID              uuid.UUID  `json:"id"`
-	Email           string     `json:"email"`
-	PasswordHash    string     `json:"-"`
-	FullName        string     `json:"full_name,omitempty"`
-	Role            UserRole   `json:"role"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	IsActive        bool       `json:"is_active"`
-	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
-	IsEmailVerified bool       `json:"is_email_verified"`
+	ID                  uuid.UUID  `json:"id"`
+	Email               string     `json:"email"`
+	PasswordHash        string     `json:"-"`
+	FullName            string     `json:"full_name,omitempty"`
+	Role                UserRole   `json:"role"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	IsActive            bool       `json:"is_active"`
+	EmailVerifiedAt     *time.Time `json:"email_verified_at,omitempty"`
+	IsEmailVerified     bool       `json:"is_email_verified"`
+	FailedLoginAttempts int        `json:"-"`
+	LastFailedLoginAt   *time.Time `json:"-"`
+	LockedUntil         *time.Time `json:"-"`
 }
 
 // UserSession stores refresh token metadata.

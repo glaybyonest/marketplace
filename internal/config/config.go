@@ -23,6 +23,19 @@ type Config struct {
 	RefreshTokenTTL               time.Duration
 	EmailVerifyTTL                time.Duration
 	PasswordResetTTL              time.Duration
+	LoginFailureWindow            time.Duration
+	LoginMaxAttempts              int
+	LoginLockoutDuration          time.Duration
+	AuthRegisterRateLimit         int
+	AuthRegisterRateWindow        time.Duration
+	AuthLoginRateLimit            int
+	AuthLoginRateWindow           time.Duration
+	AuthRefreshRateLimit          int
+	AuthRefreshRateWindow         time.Duration
+	AuthPasswordResetRateLimit    int
+	AuthPasswordResetRateWindow   time.Duration
+	AuthVerifyEmailRateLimit      int
+	AuthVerifyEmailRateWindow     time.Duration
 	LogLevel                      string
 	ReadTimeout                   time.Duration
 	WriteTimeout                  time.Duration
@@ -51,6 +64,19 @@ type rawConfig struct {
 	RefreshTokenTTL               string `validate:"required"`
 	EmailVerifyTTL                string `validate:"required"`
 	PasswordResetTTL              string `validate:"required"`
+	LoginFailureWindow            string `validate:"required"`
+	LoginMaxAttempts              int    `validate:"required,min=1,max=50"`
+	LoginLockoutDuration          string `validate:"required"`
+	AuthRegisterRateLimit         int    `validate:"required,min=1,max=1000"`
+	AuthRegisterRateWindow        string `validate:"required"`
+	AuthLoginRateLimit            int    `validate:"required,min=1,max=1000"`
+	AuthLoginRateWindow           string `validate:"required"`
+	AuthRefreshRateLimit          int    `validate:"required,min=1,max=5000"`
+	AuthRefreshRateWindow         string `validate:"required"`
+	AuthPasswordResetRateLimit    int    `validate:"required,min=1,max=1000"`
+	AuthPasswordResetRateWindow   string `validate:"required"`
+	AuthVerifyEmailRateLimit      int    `validate:"required,min=1,max=1000"`
+	AuthVerifyEmailRateWindow     string `validate:"required"`
 	AdminEmails                   string
 	LogLevel                      string `validate:"required,oneof=debug info warn error"`
 	ReadTimeout                   string `validate:"required"`
@@ -83,6 +109,19 @@ func Load() (Config, error) {
 		RefreshTokenTTL:               env("REFRESH_TOKEN_TTL", "720h"),
 		EmailVerifyTTL:                env("EMAIL_VERIFY_TTL", "24h"),
 		PasswordResetTTL:              env("PASSWORD_RESET_TTL", "1h"),
+		LoginFailureWindow:            env("AUTH_LOGIN_FAILURE_WINDOW", "15m"),
+		LoginMaxAttempts:              envInt("AUTH_LOGIN_MAX_ATTEMPTS", 5),
+		LoginLockoutDuration:          env("AUTH_LOGIN_LOCKOUT_DURATION", "15m"),
+		AuthRegisterRateLimit:         envInt("AUTH_RATE_LIMIT_REGISTER", 5),
+		AuthRegisterRateWindow:        env("AUTH_RATE_LIMIT_REGISTER_WINDOW", "1m"),
+		AuthLoginRateLimit:            envInt("AUTH_RATE_LIMIT_LOGIN", 10),
+		AuthLoginRateWindow:           env("AUTH_RATE_LIMIT_LOGIN_WINDOW", "1m"),
+		AuthRefreshRateLimit:          envInt("AUTH_RATE_LIMIT_REFRESH", 30),
+		AuthRefreshRateWindow:         env("AUTH_RATE_LIMIT_REFRESH_WINDOW", "1m"),
+		AuthPasswordResetRateLimit:    envInt("AUTH_RATE_LIMIT_PASSWORD_RESET", 5),
+		AuthPasswordResetRateWindow:   env("AUTH_RATE_LIMIT_PASSWORD_RESET_WINDOW", "15m"),
+		AuthVerifyEmailRateLimit:      envInt("AUTH_RATE_LIMIT_VERIFY_EMAIL", 5),
+		AuthVerifyEmailRateWindow:     env("AUTH_RATE_LIMIT_VERIFY_EMAIL_WINDOW", "15m"),
 		LogLevel:                      strings.ToLower(env("LOG_LEVEL", "info")),
 		ReadTimeout:                   env("HTTP_READ_TIMEOUT", "10s"),
 		WriteTimeout:                  env("HTTP_WRITE_TIMEOUT", "15s"),
@@ -121,6 +160,34 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse PASSWORD_RESET_TTL: %w", err)
 	}
+	loginFailureWindow, err := time.ParseDuration(raw.LoginFailureWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_LOGIN_FAILURE_WINDOW: %w", err)
+	}
+	loginLockoutDuration, err := time.ParseDuration(raw.LoginLockoutDuration)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_LOGIN_LOCKOUT_DURATION: %w", err)
+	}
+	authRegisterRateWindow, err := time.ParseDuration(raw.AuthRegisterRateWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_RATE_LIMIT_REGISTER_WINDOW: %w", err)
+	}
+	authLoginRateWindow, err := time.ParseDuration(raw.AuthLoginRateWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_RATE_LIMIT_LOGIN_WINDOW: %w", err)
+	}
+	authRefreshRateWindow, err := time.ParseDuration(raw.AuthRefreshRateWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_RATE_LIMIT_REFRESH_WINDOW: %w", err)
+	}
+	authPasswordResetRateWindow, err := time.ParseDuration(raw.AuthPasswordResetRateWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_RATE_LIMIT_PASSWORD_RESET_WINDOW: %w", err)
+	}
+	authVerifyEmailRateWindow, err := time.ParseDuration(raw.AuthVerifyEmailRateWindow)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse AUTH_RATE_LIMIT_VERIFY_EMAIL_WINDOW: %w", err)
+	}
 	if refreshTTL <= accessTTL {
 		return Config{}, fmt.Errorf("REFRESH_TOKEN_TTL must be greater than ACCESS_TOKEN_TTL")
 	}
@@ -129,6 +196,9 @@ func Load() (Config, error) {
 	}
 	if passwordResetTTL <= 0 {
 		return Config{}, fmt.Errorf("PASSWORD_RESET_TTL must be greater than zero")
+	}
+	if loginFailureWindow <= 0 || loginLockoutDuration <= 0 || authRegisterRateWindow <= 0 || authLoginRateWindow <= 0 || authRefreshRateWindow <= 0 || authPasswordResetRateWindow <= 0 || authVerifyEmailRateWindow <= 0 {
+		return Config{}, fmt.Errorf("security windows and lockout duration must be greater than zero")
 	}
 
 	readTimeout, err := time.ParseDuration(raw.ReadTimeout)
@@ -183,6 +253,19 @@ func Load() (Config, error) {
 		RefreshTokenTTL:               refreshTTL,
 		EmailVerifyTTL:                emailVerifyTTL,
 		PasswordResetTTL:              passwordResetTTL,
+		LoginFailureWindow:            loginFailureWindow,
+		LoginMaxAttempts:              raw.LoginMaxAttempts,
+		LoginLockoutDuration:          loginLockoutDuration,
+		AuthRegisterRateLimit:         raw.AuthRegisterRateLimit,
+		AuthRegisterRateWindow:        authRegisterRateWindow,
+		AuthLoginRateLimit:            raw.AuthLoginRateLimit,
+		AuthLoginRateWindow:           authLoginRateWindow,
+		AuthRefreshRateLimit:          raw.AuthRefreshRateLimit,
+		AuthRefreshRateWindow:         authRefreshRateWindow,
+		AuthPasswordResetRateLimit:    raw.AuthPasswordResetRateLimit,
+		AuthPasswordResetRateWindow:   authPasswordResetRateWindow,
+		AuthVerifyEmailRateLimit:      raw.AuthVerifyEmailRateLimit,
+		AuthVerifyEmailRateWindow:     authVerifyEmailRateWindow,
 		LogLevel:                      raw.LogLevel,
 		ReadTimeout:                   readTimeout,
 		WriteTimeout:                  writeTimeout,

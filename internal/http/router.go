@@ -22,6 +22,7 @@ type Dependencies struct {
 	DB                     *pgxpool.Pool
 	Metrics                *observability.Metrics
 	ErrorReporter          *observability.ErrorReporter
+	RateLimiter            *httpmw.RateLimiter
 	JWTManager             *security.JWTManager
 	AuthService            *usecase.AuthService
 	AdminService           *usecase.AdminService
@@ -32,11 +33,21 @@ type Dependencies struct {
 	FavoritesService       *usecase.FavoritesService
 	PlacesService          *usecase.PlacesService
 	RecommendationsService *usecase.RecommendationsService
+	Security               SecurityConfig
+}
+
+type SecurityConfig struct {
+	RegisterRatePolicy      httpmw.RateLimitPolicy
+	LoginRatePolicy         httpmw.RateLimitPolicy
+	RefreshRatePolicy       httpmw.RateLimitPolicy
+	PasswordResetRatePolicy httpmw.RateLimitPolicy
+	VerifyEmailRatePolicy   httpmw.RateLimitPolicy
 }
 
 func NewRouter(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RealIP)
+	router.Use(httpmw.SecurityHeaders)
 	router.Use(httpmw.RequestID)
 	router.Use(httpmw.ErrorReporter(deps.ErrorReporter))
 	router.Use(httpmw.Metrics(deps.Metrics))
@@ -72,13 +83,15 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Post("/register", authHandler.Register)
-			r.Post("/login", authHandler.Login)
-			r.Post("/refresh", authHandler.Refresh)
-			r.Post("/verify-email/request", authHandler.RequestEmailVerification)
-			r.Post("/verify-email/confirm", authHandler.ConfirmEmailVerification)
-			r.Post("/password-reset/request", authHandler.RequestPasswordReset)
-			r.Post("/password-reset/confirm", authHandler.ConfirmPasswordReset)
+			r.Use(httpmw.NoStore)
+
+			r.With(deps.RateLimiter.Middleware(deps.Security.RegisterRatePolicy)).Post("/register", authHandler.Register)
+			r.With(deps.RateLimiter.Middleware(deps.Security.LoginRatePolicy)).Post("/login", authHandler.Login)
+			r.With(deps.RateLimiter.Middleware(deps.Security.RefreshRatePolicy)).Post("/refresh", authHandler.Refresh)
+			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/request", authHandler.RequestEmailVerification)
+			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/confirm", authHandler.ConfirmEmailVerification)
+			r.With(deps.RateLimiter.Middleware(deps.Security.PasswordResetRatePolicy)).Post("/password-reset/request", authHandler.RequestPasswordReset)
+			r.With(deps.RateLimiter.Middleware(deps.Security.PasswordResetRatePolicy)).Post("/password-reset/confirm", authHandler.ConfirmPasswordReset)
 
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.Handler)
