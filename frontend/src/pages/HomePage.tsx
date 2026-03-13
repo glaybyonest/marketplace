@@ -113,6 +113,9 @@ export const HomePage = () => {
 
   const filterValues: FilterValues = {
     category_id: filters.category_id,
+    min_price: filters.min_price,
+    max_price: filters.max_price,
+    in_stock: filters.in_stock,
     sort: (filters.sort as FilterValues['sort']) ?? 'new',
   }
 
@@ -122,15 +125,9 @@ export const HomePage = () => {
         <div className={styles.heroContent}>
           <span className={styles.eyebrow}>Marketplace</span>
           <h1 className={styles.heroTitle}>Find the right product faster</h1>
-          <p className={styles.heroSub}>Catalog, favorites, profile and personal places integrated with backend API.</p>
+          <p className={styles.heroSub}>Search with suggestions, popular queries, price filters, stock status, and category shortcuts.</p>
           <div className={styles.searchWrapper}>
-            <input
-              className={styles.searchInput}
-              type="search"
-              placeholder="Search products..."
-              value={filters.q ?? ''}
-              onChange={(e) => handleSearch(e.target.value)}
-            />
+            <SearchBar key={`hero-${filters.q ?? ''}`} initialValue={filters.q ?? ''} onSearch={handleSearch} />
           </div>
         </div>
       </section>
@@ -176,7 +173,7 @@ export const HomePage = () => {
       </div>
 
       <div className={styles.searchRow}>
-        <SearchBar initialValue={filters.q ?? ''} onSearch={handleSearch} />
+        <SearchBar key={`row-${filters.q ?? ''}`} initialValue={filters.q ?? ''} onSearch={handleSearch} />
       </div>
 
       <div className={styles.layout}>

@@ -26,6 +26,16 @@ export interface Category {
 export type ProductSpecValue = string | number | boolean | null
 export type ProductSpecs = Record<string, ProductSpecValue>
 
+export interface SearchSuggestion {
+  text: string
+  kind: string
+}
+
+export interface PopularSearch {
+  query: string
+  searchCount: number
+}
+
 export interface Product {
   id: string
   title: string

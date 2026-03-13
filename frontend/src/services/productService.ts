@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/apiClient'
 import { pickData, toPaginated } from '@/services/serviceUtils'
 import type { PaginatedResponse, ProductFilters } from '@/types/api'
-import type { Product } from '@/types/domain'
+import type { PopularSearch, Product, SearchSuggestion } from '@/types/domain'
 import { normalizeProduct } from '@/utils/normalize'
 
 interface ProductPayload {
@@ -22,10 +22,13 @@ const toProductList = (raw: unknown): PaginatedResponse<Product> => {
 }
 
 const mapFilters = (filters: ProductFilters = {}) => {
-  const params: Record<string, string | number> = {}
+  const params: Record<string, string | number | boolean> = {}
 
   const q = filters.q ?? filters.query
   const categoryId = filters.category_id ?? filters.category
+  const minPrice = filters.min_price ?? filters.minPrice
+  const maxPrice = filters.max_price ?? filters.maxPrice
+  const inStock = filters.in_stock ?? filters.inStock
   const limit = filters.limit ?? filters.pageSize
 
   if (q) {
@@ -36,6 +39,15 @@ const mapFilters = (filters: ProductFilters = {}) => {
   }
   if (filters.sort) {
     params.sort = filters.sort
+  }
+  if (typeof minPrice === 'number') {
+    params.min_price = minPrice
+  }
+  if (typeof maxPrice === 'number') {
+    params.max_price = maxPrice
+  }
+  if (typeof inStock === 'boolean') {
+    params.in_stock = inStock
   }
   if (filters.page) {
     params.page = filters.page
@@ -60,6 +72,36 @@ export const productService = {
     return toProductList(response.data)
   },
 
+  async getSearchSuggestions(query: string, limit = 8): Promise<SearchSuggestion[]> {
+    const response = await apiClient.get('/v1/search/suggestions', {
+      params: { q: query, limit },
+    })
+    const items = pickData<unknown[]>(response.data) ?? []
+    return Array.isArray(items)
+      ? items.map((item) => {
+          const source = (item as Record<string, unknown>) ?? {}
+          return {
+            text: typeof source.text === 'string' ? source.text : '',
+            kind: typeof source.kind === 'string' ? source.kind : 'query',
+          }
+        }).filter((item) => item.text.length > 0)
+      : []
+  },
+
+  async getPopularSearches(limit = 6): Promise<PopularSearch[]> {
+    const response = await apiClient.get('/v1/search/popular', { params: { limit } })
+    const items = pickData<unknown[]>(response.data) ?? []
+    return Array.isArray(items)
+      ? items.map((item) => {
+          const source = (item as Record<string, unknown>) ?? {}
+          return {
+            query: typeof source.query === 'string' ? source.query : '',
+            searchCount: Number(source.search_count ?? source.searchCount ?? 0) || 0,
+          }
+        }).filter((item) => item.query.length > 0)
+      : []
+  },
+
   async getProductById(id: string): Promise<Product> {
     const response = await apiClient.get(`/v1/products/${id}`)
     return normalizeProduct(pickData(response.data))
@@ -81,4 +123,3 @@ export const productService = {
     throw new Error('Product deletion is not supported by current backend API')
   },
 }
-

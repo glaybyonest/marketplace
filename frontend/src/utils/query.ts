@@ -1,6 +1,7 @@
 import type { ProductFilters } from '@/types/api'
 
-const numberFields = new Set(['page', 'limit'])
+const numberFields = new Set(['page', 'limit', 'min_price', 'max_price'])
+const booleanFields = new Set(['in_stock'])
 
 export const searchParamsToFilters = (searchParams: URLSearchParams): ProductFilters => {
   const filters: ProductFilters = {}
@@ -15,6 +16,11 @@ export const searchParamsToFilters = (searchParams: URLSearchParams): ProductFil
       if (!Number.isNaN(parsed)) {
         ;(filters as Record<string, number>)[key] = parsed
       }
+      return
+    }
+
+    if (booleanFields.has(key)) {
+      ;(filters as Record<string, boolean>)[key] = value === 'true'
       return
     }
 

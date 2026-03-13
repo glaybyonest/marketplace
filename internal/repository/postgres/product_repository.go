@@ -44,7 +44,7 @@ func NewProductRepository(db *pgxpool.Pool) *ProductRepository {
 
 func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error) {
 	where := []string{"p.is_active = TRUE"}
-	args := make([]any, 0, 6)
+	args := make([]any, 0, 8)
 
 	if filter.CategoryID != nil {
 		args = append(args, *filter.CategoryID)
@@ -52,11 +52,33 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 	}
 	if filter.Query != "" {
 		args = append(args, "%"+strings.ToLower(filter.Query)+"%")
-		where = append(where, fmt.Sprintf("LOWER(p.name) LIKE $%d", len(args)))
+		where = append(where, fmt.Sprintf(`(
+			LOWER(p.name) LIKE $%d OR
+			LOWER(COALESCE(p.description, '')) LIKE $%d OR
+			LOWER(COALESCE(p.brand, '')) LIKE $%d OR
+			LOWER(p.slug) LIKE $%d OR
+			LOWER(p.sku) LIKE $%d OR
+			LOWER(c.name) LIKE $%d
+		)`, len(args), len(args), len(args), len(args), len(args), len(args)))
+	}
+	if filter.MinPrice != nil {
+		args = append(args, *filter.MinPrice)
+		where = append(where, fmt.Sprintf("p.price >= $%d", len(args)))
+	}
+	if filter.MaxPrice != nil {
+		args = append(args, *filter.MaxPrice)
+		where = append(where, fmt.Sprintf("p.price <= $%d", len(args)))
+	}
+	if filter.InStock != nil {
+		if *filter.InStock {
+			where = append(where, "p.stock_qty > 0")
+		} else {
+			where = append(where, "p.stock_qty >= 0")
+		}
 	}
 
 	condition := strings.Join(where, " AND ")
-	countSQL := "SELECT COUNT(*) FROM products p WHERE " + condition
+	countSQL := "SELECT COUNT(*) FROM products p INNER JOIN categories c ON c.id = p.category_id WHERE " + condition
 
 	var total int
 	if err := r.db.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
@@ -140,6 +162,127 @@ func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (domain.
 		return domain.Product{}, mapError(err)
 	}
 	return product, nil
+}
+
+func (r *ProductRepository) SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH suggestions AS (
+			SELECT DISTINCT p.name AS text, 'product' AS kind,
+				CASE WHEN LOWER(p.name) LIKE $1 || '%' THEN 1 ELSE 4 END AS rank
+			FROM products p
+			INNER JOIN categories c ON c.id = p.category_id
+			WHERE p.is_active = TRUE
+			  AND (
+				LOWER(p.name) LIKE '%' || $1 || '%'
+				OR LOWER(COALESCE(p.description, '')) LIKE '%' || $1 || '%'
+				OR LOWER(COALESCE(p.brand, '')) LIKE '%' || $1 || '%'
+				OR LOWER(p.slug) LIKE '%' || $1 || '%'
+				OR LOWER(p.sku) LIKE '%' || $1 || '%'
+				OR LOWER(c.name) LIKE '%' || $1 || '%'
+			  )
+			UNION
+			SELECT DISTINCT p.brand AS text, 'brand' AS kind,
+				CASE WHEN LOWER(p.brand) LIKE $1 || '%' THEN 2 ELSE 5 END AS rank
+			FROM products p
+			WHERE p.is_active = TRUE
+			  AND COALESCE(p.brand, '') <> ''
+			  AND LOWER(p.brand) LIKE '%' || $1 || '%'
+			UNION
+			SELECT DISTINCT c.name AS text, 'category' AS kind,
+				CASE WHEN LOWER(c.name) LIKE $1 || '%' THEN 3 ELSE 6 END AS rank
+			FROM categories c
+			INNER JOIN products p ON p.category_id = c.id
+			WHERE p.is_active = TRUE
+			  AND LOWER(c.name) LIKE '%' || $1 || '%'
+		)
+		SELECT text, kind
+		FROM suggestions
+		WHERE BTRIM(text) <> ''
+		ORDER BY rank ASC, CHAR_LENGTH(text) ASC, text ASC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+
+	items := make([]domain.SearchSuggestion, 0, limit)
+	for rows.Next() {
+		var item domain.SearchSuggestion
+		if err := rows.Scan(&item.Text, &item.Kind); err != nil {
+			return nil, mapError(err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapError(err)
+	}
+	return items, nil
+}
+
+func (r *ProductRepository) ListPopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT query_text, search_count
+		FROM search_queries
+		ORDER BY search_count DESC, last_searched_at DESC, query_text ASC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+
+	items := make([]domain.PopularSearch, 0, limit)
+	for rows.Next() {
+		var item domain.PopularSearch
+		if err := rows.Scan(&item.Query, &item.SearchCount); err != nil {
+			return nil, mapError(err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapError(err)
+	}
+	if len(items) > 0 {
+		return items, nil
+	}
+
+	fallbackRows, err := r.db.Query(ctx, `
+		SELECT p.name, 0
+		FROM products p
+		WHERE p.is_active = TRUE
+		ORDER BY p.created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer fallbackRows.Close()
+
+	fallback := make([]domain.PopularSearch, 0, limit)
+	for fallbackRows.Next() {
+		var item domain.PopularSearch
+		if err := fallbackRows.Scan(&item.Query, &item.SearchCount); err != nil {
+			return nil, mapError(err)
+		}
+		fallback = append(fallback, item)
+	}
+	if err := fallbackRows.Err(); err != nil {
+		return nil, mapError(err)
+	}
+	return fallback, nil
+}
+
+func (r *ProductRepository) TrackSearchQuery(ctx context.Context, query string) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO search_queries (query_text, search_count, last_searched_at)
+		VALUES ($1, 1, NOW())
+		ON CONFLICT (query_text)
+		DO UPDATE SET
+			search_count = search_queries.search_count + 1,
+			last_searched_at = NOW()
+	`, query)
+	return mapError(err)
 }
 
 func scanProduct(row pgx.Row, product *domain.Product) error {

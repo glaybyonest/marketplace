@@ -20,6 +20,8 @@ type CatalogService interface {
 	ListProducts(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error)
 	GetProductByID(ctx context.Context, id uuid.UUID) (domain.Product, error)
 	GetProductBySlug(ctx context.Context, slug string) (domain.Product, error)
+	SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error)
+	PopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error)
 	TrackView(ctx context.Context, userID, productID uuid.UUID) error
 }
 
@@ -82,6 +84,24 @@ func (h *CatalogHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.CategoryID = &categoryID
 	}
+	if minPrice, ok, err := parseOptionalFloat(query.Get("min_price")); err != nil {
+		writeDomainError(w, domain.ErrInvalidInput)
+		return
+	} else if ok {
+		filter.MinPrice = &minPrice
+	}
+	if maxPrice, ok, err := parseOptionalFloat(query.Get("max_price")); err != nil {
+		writeDomainError(w, domain.ErrInvalidInput)
+		return
+	} else if ok {
+		filter.MaxPrice = &maxPrice
+	}
+	if inStock, ok, err := parseOptionalBool(query.Get("in_stock")); err != nil {
+		writeDomainError(w, domain.ErrInvalidInput)
+		return
+	} else if ok {
+		filter.InStock = &inStock
+	}
 
 	result, err := h.service.ListProducts(r.Context(), filter)
 	if err != nil {
@@ -115,6 +135,29 @@ func (h *CatalogHandler) ProductBySlug(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, product)
 }
 
+func (h *CatalogHandler) SearchSuggestions(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	limit := parseIntWithDefault(r.URL.Query().Get("limit"), 8)
+
+	items, err := h.service.SearchSuggestions(r.Context(), query, limit)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, items)
+}
+
+func (h *CatalogHandler) PopularSearches(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntWithDefault(r.URL.Query().Get("limit"), 6)
+
+	items, err := h.service.PopularSearches(r.Context(), limit)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, items)
+}
+
 func parseIntWithDefault(value string, fallback int) int {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -125,4 +168,28 @@ func parseIntWithDefault(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func parseOptionalFloat(value string) (float64, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false, nil
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, false, err
+	}
+	return parsed, true, nil
+}
+
+func parseOptionalBool(value string) (bool, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false, false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, false, err
+	}
+	return parsed, true, nil
 }

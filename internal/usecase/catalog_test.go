@@ -40,11 +40,14 @@ func (m *categoryRepoMock) GetBySlug(ctx context.Context, slug string) (domain.C
 }
 
 type productRepoMock struct {
-	listResult domain.PageResult[domain.Product]
-	lastFilter domain.ProductFilter
-	listErr    error
-	byID       map[uuid.UUID]domain.Product
-	bySlug     map[string]domain.Product
+	listResult  domain.PageResult[domain.Product]
+	lastFilter  domain.ProductFilter
+	listErr     error
+	byID        map[uuid.UUID]domain.Product
+	bySlug      map[string]domain.Product
+	suggestions []domain.SearchSuggestion
+	popular     []domain.PopularSearch
+	lastTracked string
 }
 
 func (m *productRepoMock) List(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error) {
@@ -66,6 +69,25 @@ func (m *productRepoMock) GetBySlug(ctx context.Context, slug string) (domain.Pr
 		return domain.Product{}, domain.ErrNotFound
 	}
 	return item, nil
+}
+
+func (m *productRepoMock) SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error) {
+	if len(m.suggestions) > limit {
+		return m.suggestions[:limit], nil
+	}
+	return m.suggestions, nil
+}
+
+func (m *productRepoMock) ListPopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error) {
+	if len(m.popular) > limit {
+		return m.popular[:limit], nil
+	}
+	return m.popular, nil
+}
+
+func (m *productRepoMock) TrackSearchQuery(ctx context.Context, query string) error {
+	m.lastTracked = query
+	return nil
 }
 
 type eventRepoMock struct {
@@ -97,6 +119,14 @@ func TestCatalogService(t *testing.T) {
 		listResult: domain.PageResult[domain.Product]{Page: 1, Limit: 20, Total: 1, Items: []domain.Product{{ID: productID, Slug: "product"}}},
 		byID:       map[uuid.UUID]domain.Product{productID: {ID: productID, Slug: "product"}},
 		bySlug:     map[string]domain.Product{"product": {ID: productID, Slug: "product"}},
+		suggestions: []domain.SearchSuggestion{
+			{Text: "cement", Kind: "category"},
+			{Text: "cement m500", Kind: "product"},
+		},
+		popular: []domain.PopularSearch{
+			{Query: "cement", SearchCount: 3},
+			{Query: "oak", SearchCount: 2},
+		},
 	}
 	events := &eventRepoMock{}
 	service := NewCatalogService(categories, products, events)
@@ -167,6 +197,15 @@ func TestCatalogService(t *testing.T) {
 				require.NotNil(t, products.lastFilter.CategoryID)
 				assert.Equal(t, categoryID, *products.lastFilter.CategoryID)
 			}},
+			{"list price and stock filters", domain.ProductFilter{MinPrice: ptrFloat(10), MaxPrice: ptrFloat(50), InStock: ptrBool(true)}, nil, func(t *testing.T) {
+				require.NotNil(t, products.lastFilter.MinPrice)
+				require.NotNil(t, products.lastFilter.MaxPrice)
+				require.NotNil(t, products.lastFilter.InStock)
+				assert.Equal(t, 10.0, *products.lastFilter.MinPrice)
+				assert.Equal(t, 50.0, *products.lastFilter.MaxPrice)
+				assert.True(t, *products.lastFilter.InStock)
+			}},
+			{"list invalid price range", domain.ProductFilter{MinPrice: ptrFloat(100), MaxPrice: ptrFloat(50)}, domain.ErrInvalidInput, nil},
 			{"get product by id success", domain.ProductFilter{}, nil, nil},
 			{"get product by id invalid", domain.ProductFilter{}, domain.ErrInvalidInput, nil},
 			{"get product by id not found", domain.ProductFilter{}, domain.ErrNotFound, nil},
@@ -179,17 +218,17 @@ func TestCatalogService(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				var err error
 				switch index {
-				case 8:
-					_, err = service.GetProductByID(context.Background(), productID)
-				case 9:
-					_, err = service.GetProductByID(context.Background(), uuid.Nil)
 				case 10:
-					_, err = service.GetProductByID(context.Background(), uuid.New())
+					_, err = service.GetProductByID(context.Background(), productID)
 				case 11:
-					_, err = service.GetProductBySlug(context.Background(), "product")
+					_, err = service.GetProductByID(context.Background(), uuid.Nil)
 				case 12:
-					_, err = service.GetProductBySlug(context.Background(), " ")
+					_, err = service.GetProductByID(context.Background(), uuid.New())
 				case 13:
+					_, err = service.GetProductBySlug(context.Background(), "product")
+				case 14:
+					_, err = service.GetProductBySlug(context.Background(), " ")
+				case 15:
 					_, err = service.GetProductBySlug(context.Background(), "missing")
 				default:
 					_, err = service.ListProducts(context.Background(), tc.filter)
@@ -206,6 +245,20 @@ func TestCatalogService(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("search", func(t *testing.T) {
+		suggestions, err := service.SearchSuggestions(context.Background(), "  cement   m500 ", 10)
+		require.NoError(t, err)
+		require.Len(t, suggestions, 2)
+
+		popular, err := service.PopularSearches(context.Background(), 10)
+		require.NoError(t, err)
+		require.Len(t, popular, 2)
+
+		_, err = service.ListProducts(context.Background(), domain.ProductFilter{Query: "  Cement   M500 "})
+		require.NoError(t, err)
+		assert.Equal(t, "cement m500", products.lastTracked)
 	})
 
 	t.Run("events", func(t *testing.T) {
@@ -235,4 +288,12 @@ func TestCatalogService(t *testing.T) {
 			})
 		}
 	})
+}
+
+func ptrFloat(value float64) *float64 {
+	return &value
+}
+
+func ptrBool(value bool) *bool {
+	return &value
 }

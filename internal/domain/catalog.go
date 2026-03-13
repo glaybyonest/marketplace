@@ -53,9 +53,22 @@ type Product struct {
 type ProductFilter struct {
 	CategoryID *uuid.UUID
 	Query      string
+	MinPrice   *float64
+	MaxPrice   *float64
+	InStock    *bool
 	Page       int
 	Limit      int
 	Sort       string
+}
+
+type SearchSuggestion struct {
+	Text string `json:"text"`
+	Kind string `json:"kind"`
+}
+
+type PopularSearch struct {
+	Query       string `json:"query"`
+	SearchCount int    `json:"search_count"`
 }
 
 const (

@@ -71,6 +71,9 @@ func NewRouter(deps Dependencies) http.Handler {
 		r.Get("/categories/slug/{slug}", catalogHandler.CategoryBySlug)
 		r.Get("/categories/{id}", catalogHandler.CategoryByID)
 
+		r.Get("/search/suggestions", catalogHandler.SearchSuggestions)
+		r.Get("/search/popular", catalogHandler.PopularSearches)
+
 		r.Get("/products", catalogHandler.ProductsList)
 		r.Get("/products/slug/{slug}", catalogHandler.ProductBySlug)
 		r.Get("/products/{id}", catalogHandler.ProductByID)

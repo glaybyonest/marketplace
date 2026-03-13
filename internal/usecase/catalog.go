@@ -19,6 +19,9 @@ type CatalogProductRepository interface {
 	List(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error)
 	GetByID(ctx context.Context, id uuid.UUID) (domain.Product, error)
 	GetBySlug(ctx context.Context, slug string) (domain.Product, error)
+	SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error)
+	ListPopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error)
+	TrackSearchQuery(ctx context.Context, query string) error
 }
 
 type CatalogEventRepository interface {
@@ -112,6 +115,15 @@ func (s *CatalogService) ListProducts(ctx context.Context, filter domain.Product
 	}
 
 	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.MinPrice != nil && *filter.MinPrice < 0 {
+		return domain.PageResult[domain.Product]{}, domain.ErrInvalidInput
+	}
+	if filter.MaxPrice != nil && *filter.MaxPrice < 0 {
+		return domain.PageResult[domain.Product]{}, domain.ErrInvalidInput
+	}
+	if filter.MinPrice != nil && filter.MaxPrice != nil && *filter.MinPrice > *filter.MaxPrice {
+		return domain.PageResult[domain.Product]{}, domain.ErrInvalidInput
+	}
 	filter.Sort = strings.TrimSpace(filter.Sort)
 	if filter.Sort == "" {
 		filter.Sort = domain.SortNew
@@ -123,7 +135,16 @@ func (s *CatalogService) ListProducts(ctx context.Context, filter domain.Product
 		return domain.PageResult[domain.Product]{}, domain.ErrInvalidInput
 	}
 
-	return s.products.List(ctx, filter)
+	result, err := s.products.List(ctx, filter)
+	if err != nil {
+		return domain.PageResult[domain.Product]{}, err
+	}
+
+	if normalizedQuery := normalizeSearchQuery(filter.Query); len(normalizedQuery) >= 2 {
+		_ = s.products.TrackSearchQuery(ctx, normalizedQuery)
+	}
+
+	return result, nil
 }
 
 func (s *CatalogService) GetProductByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
@@ -141,9 +162,37 @@ func (s *CatalogService) GetProductBySlug(ctx context.Context, slug string) (dom
 	return s.products.GetBySlug(ctx, slug)
 }
 
+func (s *CatalogService) SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error) {
+	query = normalizeSearchQuery(query)
+	if len(query) < 2 {
+		return []domain.SearchSuggestion{}, nil
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	return s.products.SearchSuggestions(ctx, query, limit)
+}
+
+func (s *CatalogService) PopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error) {
+	if limit <= 0 {
+		limit = 6
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	return s.products.ListPopularSearches(ctx, limit)
+}
+
 func (s *CatalogService) TrackView(ctx context.Context, userID, productID uuid.UUID) error {
 	if userID == uuid.Nil || productID == uuid.Nil {
 		return domain.ErrInvalidInput
 	}
 	return s.events.Create(ctx, userID, productID, domain.ProductEventView)
+}
+
+func normalizeSearchQuery(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
 }

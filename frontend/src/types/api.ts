@@ -28,11 +28,17 @@ export type ProductSort = 'new' | 'price_asc' | 'price_desc'
 export interface ProductFilters {
   q?: string
   category_id?: string
+  min_price?: number
+  max_price?: number
+  in_stock?: boolean
   sort?: ProductSort
   page?: number
   limit?: number
   // legacy aliases for existing components/utilities
   query?: string
   category?: string
+  minPrice?: number
+  maxPrice?: number
+  inStock?: boolean
   pageSize?: number
 }
