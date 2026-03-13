@@ -1,32 +1,32 @@
-# Marketplace Backend
+﻿# Marketplace Backend
 
-Production-style backend for a marketplace application with JWT auth, catalog, favorites, places, and personalized recommendations.
+Бэкенд маркетплейса на Go с JWT-аутентификацией, каталогом, избранным, адресами и персональными рекомендациями.
 
-## Tech Stack
+## Технологии
 - Go 1.24+
 - PostgreSQL 16
 - Chi router
-- Pgx (database driver)
+- Pgx
 - Goose migrations
 - Docker / Docker Compose
-- Frontend: React + Vite (in `frontend/`)
+- Frontend: React + Vite (в папке `frontend/`)
 
-## Repository Layout
-- `cmd/api` - application entrypoint
-- `internal/app` - app wiring and startup
-- `internal/http` - handlers, middleware, DTO, response envelopes
-- `internal/usecase` - business logic
-- `internal/repository/postgres` - SQL repositories
-- `internal/domain` - domain models and errors
-- `migrations` - database schema and seed migrations
-- `docker` - postgres init scripts
-- `frontend` - React frontend integrated with this backend API
-- `scripts` - local dev helper scripts
+## Структура репозитория
+- `cmd/api` - точка входа приложения
+- `internal/app` - инициализация и сборка зависимостей
+- `internal/http` - handlers, middleware, DTO, envelope-ответы
+- `internal/usecase` - бизнес-логика
+- `internal/repository/postgres` - SQL-репозитории
+- `internal/domain` - доменные модели и ошибки
+- `migrations` - миграции схемы и сиды
+- `docker` - init-скрипты PostgreSQL
+- `frontend` - фронтенд, интегрированный с этим API
+- `scripts` - вспомогательные скрипты запуска
 
-## Environment
-Create `.env` from `.env.example` and set a secure `JWT_SECRET`.
+## Переменные окружения
+Создайте `.env` на основе `.env.example` и задайте безопасный `JWT_SECRET`.
 
-Example values:
+Пример:
 ```env
 APP_ENV=development
 HTTP_PORT=8080
@@ -38,65 +38,61 @@ REFRESH_TOKEN_TTL=720h
 LOG_LEVEL=info
 ```
 
-## Run with Docker
-1. Start services:
+## Запуск через Docker
+1. Поднять сервисы:
 ```bash
 docker compose up -d --build
 ```
-2. Check status:
+2. Проверить статус:
 ```bash
 docker compose ps
 ```
-3. Health checks:
+3. Проверить health endpoints:
 ```bash
 curl http://localhost:8080/healthz
 curl http://localhost:8080/readyz
 ```
-4. Stop services:
+4. Остановить сервисы:
 ```bash
 docker compose down -v
 ```
 
-## Database Migrations
-Run migrations from host:
+## Миграции базы данных
+Применить миграции с хоста:
 ```bash
 go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://postgres:postgres@localhost:5433/marketplace?sslmode=disable" up
 ```
 
-Rollback one step:
+Откатить один шаг:
 ```bash
 go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://postgres:postgres@localhost:5433/marketplace?sslmode=disable" down
 ```
 
-Notes:
-- `00003_db_hardening.sql` adds DB constraints and performance indexes.
-- `00004_products_search_trgm.sql` adds optional `pg_trgm` index for faster `LIKE` search.
+Примечания:
+- `00003_db_hardening.sql` добавляет ограничения целостности и рабочие индексы.
+- `00004_products_search_trgm.sql` добавляет опциональный `pg_trgm` индекс для ускорения `LIKE`-поиска.
 
-## Run Backend Locally (without Docker API container)
-1. Start PostgreSQL only:
+## Локальный запуск backend (без Docker API-контейнера)
+1. Поднять только PostgreSQL:
 ```bash
 docker compose up -d postgres
 ```
-2. Apply migrations.
-3. Run API:
+2. Применить миграции.
+3. Запустить API:
 ```bash
 go run ./cmd/api
 ```
 
-## Run Frontend Locally
+## Локальный запуск frontend
 ```bash
 cd frontend
 npm install
-```
-
-Create frontend env from template and run:
-```bash
 npm run dev
 ```
 
-Default frontend proxy target is `http://localhost:8080`.
+По умолчанию фронтенд проксирует запросы на `http://localhost:8080`.
 
-## Tests and Checks
+## Тесты и проверки
 Backend:
 ```bash
 go test ./...
@@ -110,10 +106,10 @@ npm run test
 npm run build
 ```
 
-## API Overview
-Base URL: `http://localhost:8080`
+## Обзор API
+Базовый адрес: `http://localhost:8080`
 
-Public:
+Публичные endpoints:
 - `GET /healthz`
 - `GET /readyz`
 - `POST /api/v1/auth/register`
@@ -126,7 +122,7 @@ Public:
 - `GET /api/v1/products/slug/{slug}`
 - `GET /api/v1/products/{id}`
 
-Authenticated:
+Требуют авторизацию:
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/me`
 - `GET /api/v1/profile`
@@ -140,11 +136,11 @@ Authenticated:
 - `DELETE /api/v1/places/{id}`
 - `GET /api/v1/recommendations`
 
-## Useful Commands
-From repo root:
+## Полезные команды
+Из корня репозитория:
 - `powershell -ExecutionPolicy Bypass -File scripts/dev-backend.ps1`
 - `powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1`
 - `go test ./...`
 
-## License
-Internal project / educational use.
+## Лицензия
+Внутренний / учебный проект.

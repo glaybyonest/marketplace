@@ -91,13 +91,37 @@ func TestProfileService(t *testing.T) {
 			_, err := service.Update(context.Background(), userID, &name)
 			return err
 		}, domain.ErrInvalidInput},
-		{"update ascii", func() error { name := "John"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update cyrillic", func() error { name := "Иван"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
+		{"update ascii", func() error {
+			name := "John"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
+		{"update cyrillic", func() error {
+			name := "Иван"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
 		{"update single char", func() error { name := "A"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update with dot", func() error { name := "A.B."; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update with dash", func() error { name := "Anna-Maria"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update with apostrophe", func() error { name := "O'Connor"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update with numbers", func() error { name := "User 2"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
+		{"update with dot", func() error {
+			name := "A.B."
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
+		{"update with dash", func() error {
+			name := "Anna-Maria"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
+		{"update with apostrophe", func() error {
+			name := "O'Connor"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
+		{"update with numbers", func() error {
+			name := "User 2"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
 		{"update with tabs trim", func() error {
 			name := "\tName\t"
 			updated, err := service.Update(context.Background(), userID, &name)
@@ -135,8 +159,16 @@ func TestProfileService(t *testing.T) {
 			_, err = service.Update(context.Background(), userID, &name)
 			return err
 		}, nil},
-		{"update unicode", func() error { name := "Müller"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
-		{"update emoji allowed", func() error { name := "Name 🙂"; _, err := service.Update(context.Background(), userID, &name); return err }, nil},
+		{"update unicode", func() error {
+			name := "Müller"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
+		{"update emoji allowed", func() error {
+			name := "Name 🙂"
+			_, err := service.Update(context.Background(), userID, &name)
+			return err
+		}, nil},
 		{"update trailing spaces", func() error {
 			name := "Name   "
 			updated, err := service.Update(context.Background(), userID, &name)

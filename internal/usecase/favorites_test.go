@@ -118,7 +118,13 @@ func TestFavoritesService(t *testing.T) {
 		{"add unknown product", func() error { _, err := service.Add(context.Background(), userID, uuid.New()); return err }, domain.ErrNotFound},
 		{"list success", func() error { _, err := service.List(context.Background(), userID, 1, 20); return err }, nil},
 		{"list default page", func() error { _, err := service.List(context.Background(), userID, 0, 0); return err }, nil},
-		{"list max limit", func() error { result, err := service.List(context.Background(), userID, 1, 1000); if err == nil && result.Limit != 100 { return domain.ErrInvalidInput }; return err }, nil},
+		{"list max limit", func() error {
+			result, err := service.List(context.Background(), userID, 1, 1000)
+			if err == nil && result.Limit != 100 {
+				return domain.ErrInvalidInput
+			}
+			return err
+		}, nil},
 		{"list unauthorized", func() error { _, err := service.List(context.Background(), uuid.Nil, 1, 20); return err }, domain.ErrUnauthorized},
 		{"remove success", func() error { return service.Remove(context.Background(), userID, productID) }, nil},
 		{"remove idempotent", func() error { return service.Remove(context.Background(), userID, productID) }, nil},

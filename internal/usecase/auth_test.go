@@ -261,16 +261,43 @@ func TestAuthService(t *testing.T) {
 			run     func() error
 			wantErr error
 		}{
-			{"refresh success", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: pair.RefreshToken}); return err }, nil},
-			{"refresh reused old token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: pair.RefreshToken}); return err }, domain.ErrTokenReused},
-			{"refresh unknown token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: invalid}); return err }, domain.ErrUnauthorized},
-			{"refresh revoked token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: revoked}); return err }, domain.ErrSessionClosed},
-			{"refresh rotated token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: reused}); return err }, domain.ErrTokenReused},
-			{"refresh expired token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: expired}); return err }, domain.ErrUnauthorized},
-			{"refresh empty token", func() error { _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: ""}); return err }, domain.ErrUnauthorized},
-			{"logout success", func() error { return service.Logout(context.Background(), LogoutInput{UserID: user.ID, RefreshToken: pair.RefreshToken + "-new"}) }, domain.ErrUnauthorized},
-			{"logout unknown token", func() error { return service.Logout(context.Background(), LogoutInput{UserID: user.ID, RefreshToken: invalid}) }, domain.ErrUnauthorized},
-			{"logout nil user", func() error { return service.Logout(context.Background(), LogoutInput{UserID: uuid.Nil, RefreshToken: invalid}) }, domain.ErrUnauthorized},
+			{"refresh success", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: pair.RefreshToken})
+				return err
+			}, nil},
+			{"refresh reused old token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: pair.RefreshToken})
+				return err
+			}, domain.ErrTokenReused},
+			{"refresh unknown token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: invalid})
+				return err
+			}, domain.ErrUnauthorized},
+			{"refresh revoked token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: revoked})
+				return err
+			}, domain.ErrSessionClosed},
+			{"refresh rotated token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: reused})
+				return err
+			}, domain.ErrTokenReused},
+			{"refresh expired token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: expired})
+				return err
+			}, domain.ErrUnauthorized},
+			{"refresh empty token", func() error {
+				_, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: ""})
+				return err
+			}, domain.ErrUnauthorized},
+			{"logout success", func() error {
+				return service.Logout(context.Background(), LogoutInput{UserID: user.ID, RefreshToken: pair.RefreshToken + "-new"})
+			}, domain.ErrUnauthorized},
+			{"logout unknown token", func() error {
+				return service.Logout(context.Background(), LogoutInput{UserID: user.ID, RefreshToken: invalid})
+			}, domain.ErrUnauthorized},
+			{"logout nil user", func() error {
+				return service.Logout(context.Background(), LogoutInput{UserID: uuid.Nil, RefreshToken: invalid})
+			}, domain.ErrUnauthorized},
 			{"me success", func() error { _, err := service.Me(context.Background(), user.ID); return err }, nil},
 			{"me nil user", func() error { _, err := service.Me(context.Background(), uuid.Nil); return err }, domain.ErrUnauthorized},
 			{"me not found", func() error { _, err := service.Me(context.Background(), uuid.New()); return err }, domain.ErrNotFound},
