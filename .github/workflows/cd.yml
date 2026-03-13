@@ -1,0 +1,130 @@
+name: cd
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: "Run database migrations before restarting services"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/marketplace-backend-api
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.sha }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      IMAGE_REF: ghcr.io/${{ github.repository_owner }}/marketplace-backend-api:${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deploy secrets
+        run: |
+          test -n "$DEPLOY_HOST" || (echo "Missing DEPLOY_HOST" && exit 1)
+          test -n "$DEPLOY_USER" || (echo "Missing DEPLOY_USER" && exit 1)
+          test -n "$DEPLOY_SSH_KEY" || (echo "Missing DEPLOY_SSH_KEY" && exit 1)
+          test -n "$DEPLOY_PATH" || (echo "Missing DEPLOY_PATH" && exit 1)
+          test -n "$GHCR_USERNAME" || (echo "Missing GHCR_USERNAME" && exit 1)
+          test -n "$GHCR_TOKEN" || (echo "Missing GHCR_TOKEN" && exit 1)
+
+      - name: Create deploy directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT || '22' }}
+          script: |
+            mkdir -p "${DEPLOY_PATH}/scripts"
+            mkdir -p "${DEPLOY_PATH}/docker/monitoring/prometheus"
+            mkdir -p "${DEPLOY_PATH}/docker/monitoring/alertmanager"
+            mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/provisioning/datasources"
+            mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/provisioning/dashboards"
+            mkdir -p "${DEPLOY_PATH}/docker/monitoring/grafana/dashboards"
+        envs: DEPLOY_PATH
+
+      - name: Upload deploy bundle
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT || '22' }}
+          target: ${{ env.DEPLOY_PATH }}
+          source: "docker-compose.prod.yml,scripts/deploy-prod.sh,scripts/backup-postgres.sh,scripts/restore-postgres.sh,scripts/prune-backups.sh,docker/monitoring/prometheus/prometheus.prod.yml,docker/monitoring/prometheus/alerts.prod.yml,docker/monitoring/alertmanager/alertmanager.yml,docker/monitoring/alertmanager/alertmanager.example.yml,docker/monitoring/grafana/provisioning/datasources/datasource.yml,docker/monitoring/grafana/provisioning/dashboards/dashboards.yml,docker/monitoring/grafana/dashboards/marketplace-observability.json"
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT || '22' }}
+          script: |
+            set -euo pipefail
+            cd "${DEPLOY_PATH}"
+            test -f .env.production || (echo "Missing .env.production on server" && exit 1)
+            chmod +x scripts/*.sh
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            export API_IMAGE="${IMAGE_REF}"
+            export ENV_FILE="${DEPLOY_PATH}/.env.production"
+            export RUN_MIGRATIONS="${{ inputs.run_migrations }}"
+            bash scripts/deploy-prod.sh
+            docker image prune -af --filter "until=168h"
+        envs: DEPLOY_PATH,GHCR_USERNAME,GHCR_TOKEN,IMAGE_REF

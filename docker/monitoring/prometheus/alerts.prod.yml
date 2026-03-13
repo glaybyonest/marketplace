@@ -1,0 +1,55 @@
+groups:
+  - name: marketplace-api
+    rules:
+      - alert: MarketplaceAPIDown
+        expr: up{job="marketplace-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: Marketplace API is down
+          description: Prometheus has not been able to scrape marketplace-api for more than 2 minutes.
+
+      - alert: MarketplaceHigh5xxRate
+        expr: |
+          (
+            sum(rate(marketplace_http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(marketplace_http_requests_total[5m])), 1)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: High 5xx error rate on marketplace API
+          description: More than 5% of HTTP responses have been 5xx during the last 10 minutes.
+
+      - alert: MarketplaceHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(marketplace_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: Marketplace API p95 latency is high
+          description: The estimated p95 latency is above 1 second for more than 10 minutes.
+
+      - alert: MarketplaceDBPoolSaturation
+        expr: |
+          marketplace_db_pool_acquired_connections
+          /
+          clamp_min(marketplace_db_pool_total_connections, 1)
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: Database connection pool is close to saturation
+          description: More than 80% of database connections are acquired for 10 minutes.

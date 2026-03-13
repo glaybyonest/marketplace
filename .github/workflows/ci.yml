@@ -57,6 +57,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validate production compose
+        run: ENV_FILE=.env.production.example docker compose --env-file .env.production.example -f docker-compose.prod.yml config >/dev/null
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
