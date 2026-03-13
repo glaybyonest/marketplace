@@ -49,19 +49,19 @@ const mapFilters = (filters: ProductFilters = {}) => {
 
 export const productService = {
   async getProducts(filters: ProductFilters = {}): Promise<PaginatedResponse<Product>> {
-    const response = await apiClient.get('/api/v1/products', { params: mapFilters(filters) })
+    const response = await apiClient.get('/v1/products', { params: mapFilters(filters) })
     return toProductList(response.data)
   },
 
   async searchProducts(query: string): Promise<PaginatedResponse<Product>> {
-    const response = await apiClient.get('/api/v1/products', {
+    const response = await apiClient.get('/v1/products', {
       params: mapFilters({ q: query, page: 1, limit: 20 }),
     })
     return toProductList(response.data)
   },
 
   async getProductById(id: string): Promise<Product> {
-    const response = await apiClient.get(`/api/v1/products/${id}`)
+    const response = await apiClient.get(`/v1/products/${id}`)
     return normalizeProduct(pickData(response.data))
   },
 
@@ -81,3 +81,4 @@ export const productService = {
     throw new Error('Product deletion is not supported by current backend API')
   },
 }
+

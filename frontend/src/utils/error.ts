@@ -19,7 +19,17 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
   }
 
   const axiosError = error as AxiosError<BackendErrorBody>
+  const backendCode = axiosError.response?.data?.error?.code
   const backendMessage = axiosError.response?.data?.error?.message
+
+  if (backendCode === 'conflict') {
+    return 'Пользователь с таким email уже существует'
+  }
+
+  if (backendCode === 'invalid_input') {
+    return 'Проверьте корректность введенных данных'
+  }
+
   if (backendMessage) {
     return backendMessage
   }

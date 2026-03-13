@@ -11,7 +11,7 @@ const isAuthEndpoint = (url?: string) => {
   if (!url) {
     return false
   }
-  return url.includes('/api/v1/auth/login') || url.includes('/api/v1/auth/register') || url.includes('/api/v1/auth/refresh')
+  return url.includes('/v1/auth/login') || url.includes('/v1/auth/register') || url.includes('/v1/auth/refresh')
 }
 
 type RetryableConfig = InternalAxiosRequestConfig & {
@@ -48,7 +48,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
     try {
       const response = await apiClient.post(
-        '/api/v1/auth/refresh',
+        '/v1/auth/refresh',
         { refresh_token: refreshToken },
         { skipAuthRefresh: true } as RetryableConfig,
       )
@@ -115,3 +115,4 @@ apiClient.interceptors.response.use(
     return apiClient.request(originalRequest)
   },
 )
+

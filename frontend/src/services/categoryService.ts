@@ -27,7 +27,7 @@ const flattenCategories = (nodes: unknown[]): Category[] => {
 
 export const categoryService = {
   async getCategories(): Promise<Category[]> {
-    const response = await apiClient.get('/api/v1/categories')
+    const response = await apiClient.get('/v1/categories')
     const source = pickData<unknown>(response.data)
 
     if (Array.isArray(source)) {
@@ -53,3 +53,4 @@ export const categoryService = {
     throw new Error('Category deletion is not supported by current backend API')
   },
 }
+

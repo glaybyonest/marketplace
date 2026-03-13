@@ -2,6 +2,12 @@
 
 Бэкенд маркетплейса на Go с JWT-аутентификацией, каталогом, избранным, адресами и персональными рекомендациями.
 
+## Требования
+- Docker Desktop 4+
+- Docker Compose v2
+- Node.js 20+ и npm 10+ (для локального frontend)
+- Go 1.24+ (для локального backend без API-контейнера)
+
 ## Технологии
 - Go 1.24+
 - PostgreSQL 16
@@ -38,7 +44,28 @@ REFRESH_TOKEN_TTL=720h
 LOG_LEVEL=info
 ```
 
-## Запуск через Docker
+## Быстрый старт (одним скриптом)
+Из корня репозитория:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev-all.ps1
+```
+
+Что делает скрипт:
+- создаёт `.env` из `.env.example`, если файла нет;
+- поднимает `postgres`, `api`, `adminer` через `docker compose`;
+- ждёт готовность backend (`/readyz`);
+- запускает frontend (`npm run dev`).
+
+Опции:
+```powershell
+# пропустить npm install во frontend
+powershell -ExecutionPolicy Bypass -File scripts/dev-all.ps1 -SkipFrontendInstall
+
+# при выходе из скрипта автоматически остановить docker-контейнеры
+powershell -ExecutionPolicy Bypass -File scripts/dev-all.ps1 -StopContainersOnExit
+```
+
+## Запуск вручную через Docker
 1. Поднять сервисы:
 ```bash
 docker compose up -d --build
@@ -55,6 +82,21 @@ curl http://localhost:8080/readyz
 4. Остановить сервисы:
 ```bash
 docker compose down -v
+```
+
+## Локальный запуск frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+По умолчанию фронтенд проксирует запросы на `http://localhost:8080`.
+
+`frontend/.env.example`:
+```env
+VITE_API_BASE_URL=/api
+VITE_API_PROXY_TARGET=http://localhost:8080
 ```
 
 ## Миграции базы данных
@@ -82,15 +124,6 @@ docker compose up -d postgres
 ```bash
 go run ./cmd/api
 ```
-
-## Локальный запуск frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-По умолчанию фронтенд проксирует запросы на `http://localhost:8080`.
 
 ## Тесты и проверки
 Backend:
@@ -136,8 +169,14 @@ npm run build
 - `DELETE /api/v1/places/{id}`
 - `GET /api/v1/recommendations`
 
+## Частые проблемы
+- `404` на `api/api/v1/...`: проверьте, что `VITE_API_BASE_URL=/api`, а запросы в коде идут на `/v1/...`.
+- `400` на `POST /api/v1/auth/register`: пароль должен быть длиной `8-72`, содержать минимум одну латинскую букву и одну цифру; `email` должен быть уникальным.
+- `css2 ... ERR_TIMED_OUT`: проблема с внешними шрифтами/сетью/кэшем браузера; сделайте hard refresh (`Ctrl+F5`) и перезапустите frontend.
+
 ## Полезные команды
 Из корня репозитория:
+- `powershell -ExecutionPolicy Bypass -File scripts/dev-all.ps1`
 - `powershell -ExecutionPolicy Bypass -File scripts/dev-backend.ps1`
 - `powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1`
 - `go test ./...`

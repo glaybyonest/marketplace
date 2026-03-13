@@ -10,15 +10,16 @@ interface UpdateProfilePayload {
 
 export const userService = {
   async getMe(): Promise<User> {
-    const response = await apiClient.get('/api/v1/profile')
+    const response = await apiClient.get('/v1/profile')
     return normalizeUser(pickData(response.data))
   },
 
   async updateMe(payload: UpdateProfilePayload): Promise<User> {
     const fullName = payload.fullName ?? payload.name
-    const response = await apiClient.patch('/api/v1/profile', {
+    const response = await apiClient.patch('/v1/profile', {
       full_name: fullName,
     })
     return normalizeUser(pickData(response.data))
   },
 }
+

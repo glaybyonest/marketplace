@@ -22,7 +22,7 @@ export const LoginPage = () => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    const result = await dispatch(loginThunk({ email, password }))
+    const result = await dispatch(loginThunk({ email: email.trim(), password }))
     if (loginThunk.fulfilled.match(result)) {
       navigate(from, { replace: true })
     }
@@ -31,8 +31,8 @@ export const LoginPage = () => {
   return (
     <div className={styles.page}>
       <section className={styles.card}>
-        <h1>Вход</h1>
-        <p>Войдите, чтобы управлять корзиной и заказами.</p>
+        <h1>????</h1>
+        <p>???????, ????? ???????? ? ?????????, ???????? ? ????????.</p>
         <form className={styles.form} onSubmit={handleSubmit}>
           <label>
             Email
@@ -41,25 +41,28 @@ export const LoginPage = () => {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
+              autoComplete="email"
+              maxLength={254}
               required
             />
           </label>
           <label>
-            Пароль
+            ??????
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
               required
             />
           </label>
           {authState.error ? <ErrorMessage message={authState.error} /> : null}
           <button type="submit" disabled={authState.status === 'loading'}>
-            {authState.status === 'loading' ? 'Входим...' : 'Войти'}
+            {authState.status === 'loading' ? '??????...' : '?????'}
           </button>
         </form>
         <p>
-          Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+          ??? ????????? <Link to="/register">??????????????????</Link>
         </p>
       </section>
     </div>

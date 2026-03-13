@@ -5,7 +5,7 @@ import { normalizeProduct } from '@/utils/normalize'
 
 export const recommendationsService = {
   async list(limit = 8): Promise<Product[]> {
-    const response = await apiClient.get('/api/v1/recommendations', { params: { limit } })
+    const response = await apiClient.get('/v1/recommendations', { params: { limit } })
     const source = pickData<unknown>(response.data)
     if (!Array.isArray(source)) {
       return []
@@ -13,3 +13,4 @@ export const recommendationsService = {
     return source.map(normalizeProduct)
   },
 }
+

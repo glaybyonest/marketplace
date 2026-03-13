@@ -29,12 +29,12 @@ const normalizeAuthResponse = (raw: unknown): AuthResponse<User> => {
 
 export const authService = {
   async login(payload: Credentials): Promise<AuthResponse<User>> {
-    const response = await apiClient.post('/api/v1/auth/login', payload)
+    const response = await apiClient.post('/v1/auth/login', payload)
     return normalizeAuthResponse(response.data)
   },
 
   async register(payload: RegisterPayload): Promise<AuthResponse<User>> {
-    const response = await apiClient.post('/api/v1/auth/register', {
+    const response = await apiClient.post('/v1/auth/register', {
       email: payload.email,
       password: payload.password,
       full_name: payload.name,
@@ -48,8 +48,9 @@ export const authService = {
       return
     }
 
-    await apiClient.post('/api/v1/auth/logout', {
+    await apiClient.post('/v1/auth/logout', {
       refresh_token: refreshToken,
     })
   },
 }
+

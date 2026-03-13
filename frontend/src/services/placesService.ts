@@ -12,7 +12,7 @@ interface PlacePayload {
 
 export const placesService = {
   async list(): Promise<Place[]> {
-    const response = await apiClient.get('/api/v1/places')
+    const response = await apiClient.get('/v1/places')
     const source = pickData<unknown>(response.data)
     if (!Array.isArray(source)) {
       return []
@@ -21,7 +21,7 @@ export const placesService = {
   },
 
   async create(payload: PlacePayload): Promise<Place> {
-    const response = await apiClient.post('/api/v1/places', {
+    const response = await apiClient.post('/v1/places', {
       title: payload.title,
       address_text: payload.addressText,
       lat: payload.lat,
@@ -31,7 +31,7 @@ export const placesService = {
   },
 
   async update(id: string, payload: Partial<PlacePayload>): Promise<Place> {
-    const response = await apiClient.patch(`/api/v1/places/${id}`, {
+    const response = await apiClient.patch(`/v1/places/${id}`, {
       title: payload.title,
       address_text: payload.addressText,
       lat: payload.lat,
@@ -41,6 +41,7 @@ export const placesService = {
   },
 
   async remove(id: string): Promise<void> {
-    await apiClient.delete(`/api/v1/places/${id}`)
+    await apiClient.delete(`/v1/places/${id}`)
   },
 }
+
