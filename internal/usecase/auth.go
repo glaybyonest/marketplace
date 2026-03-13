@@ -39,7 +39,7 @@ type AuthActionTokenRepository interface {
 }
 
 type JWTProvider interface {
-	Generate(userID uuid.UUID, email string) (token string, expiresAt time.Time, err error)
+	Generate(userID uuid.UUID, email string, role domain.UserRole) (token string, expiresAt time.Time, err error)
 }
 
 type PasswordProvider interface {
@@ -55,6 +55,7 @@ type CreateUserInput struct {
 	Email           string
 	PasswordHash    string
 	FullName        *string
+	Role            domain.UserRole
 	EmailVerifiedAt *time.Time
 }
 
@@ -121,6 +122,7 @@ type AuthService struct {
 	passwordResetTTL time.Duration
 	appBaseURL       string
 	mailFrom         string
+	adminEmails      map[string]struct{}
 	now              func() time.Time
 }
 
@@ -133,10 +135,20 @@ func NewAuthService(
 	mailer Mailer,
 	appBaseURL string,
 	mailFrom string,
+	adminEmails []string,
 	refreshTTL time.Duration,
 	emailVerifyTTL time.Duration,
 	passwordResetTTL time.Duration,
 ) *AuthService {
+	normalizedAdminEmails := make(map[string]struct{}, len(adminEmails))
+	for _, email := range adminEmails {
+		normalized := strings.ToLower(strings.TrimSpace(email))
+		if normalized == "" {
+			continue
+		}
+		normalizedAdminEmails[normalized] = struct{}{}
+	}
+
 	return &AuthService{
 		users:            users,
 		sessions:         sessions,
@@ -149,6 +161,7 @@ func NewAuthService(
 		passwordResetTTL: passwordResetTTL,
 		appBaseURL:       strings.TrimRight(strings.TrimSpace(appBaseURL), "/"),
 		mailFrom:         strings.TrimSpace(mailFrom),
+		adminEmails:      normalizedAdminEmails,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -174,6 +187,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (domain
 		Email:           email,
 		PasswordHash:    passwordHash,
 		FullName:        fullName,
+		Role:            s.resolveRole(email),
 		EmailVerifiedAt: nil,
 	})
 	if err != nil {
@@ -281,7 +295,7 @@ func (s *AuthService) Refresh(ctx context.Context, input RefreshInput) (domain.T
 		return domain.TokenPair{}, err
 	}
 
-	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email)
+	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role)
 	if err != nil {
 		return domain.TokenPair{}, fmt.Errorf("generate access token: %w", err)
 	}
@@ -443,7 +457,7 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, input PasswordRe
 func (s *AuthService) issueTokens(ctx context.Context, user domain.User, userAgent, ip string) (*domain.TokenPair, error) {
 	now := s.now()
 
-	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email)
+	accessToken, accessExp, err := s.jwt.Generate(user.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
@@ -470,6 +484,13 @@ func (s *AuthService) issueTokens(ctx context.Context, user domain.User, userAge
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(accessExp.Sub(now).Seconds()),
 	}, nil
+}
+
+func (s *AuthService) resolveRole(email string) domain.UserRole {
+	if _, ok := s.adminEmails[email]; ok {
+		return domain.UserRoleAdmin
+	}
+	return domain.UserRoleCustomer
 }
 
 func (s *AuthService) issueEmailVerification(ctx context.Context, user domain.User) error {

@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { AccountPage } from '@/pages/AccountPage'
+import { AdminCategoriesPage } from '@/pages/AdminCategoriesPage'
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
+import { AdminProductsPage } from '@/pages/AdminProductsPage'
 import { CartPage } from '@/pages/CartPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
@@ -35,8 +38,13 @@ export const AppRouter = () => (
       <Route path="/account/places" element={<PlacesPage />} />
     </Route>
 
+    <Route element={<ProtectedRoute requiredRole="admin" />}>
+      <Route path="/admin" element={<AdminDashboardPage />} />
+      <Route path="/admin/categories" element={<AdminCategoriesPage />} />
+      <Route path="/admin/products" element={<AdminProductsPage />} />
+    </Route>
+
     <Route path="/seller/*" element={<Navigate to="/" replace />} />
-    <Route path="/admin/*" element={<Navigate to="/" replace />} />
 
     <Route path="/logout" element={<Navigate to="/login" replace />} />
     <Route path="*" element={<NotFoundPage />} />

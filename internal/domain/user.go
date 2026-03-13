@@ -6,12 +6,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type UserRole string
+
+const (
+	UserRoleCustomer UserRole = "customer"
+	UserRoleAdmin    UserRole = "admin"
+)
+
 // User is a registered account.
 type User struct {
 	ID              uuid.UUID  `json:"id"`
 	Email           string     `json:"email"`
 	PasswordHash    string     `json:"-"`
 	FullName        string     `json:"full_name,omitempty"`
+	Role            UserRole   `json:"role"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	IsActive        bool       `json:"is_active"`

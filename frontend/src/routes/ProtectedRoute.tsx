@@ -1,13 +1,27 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
+import { AppLoader } from '@/components/common/AppLoader'
 import { useAppSelector } from '@/store/hooks'
+import type { UserRole } from '@/types/domain'
 
-export const ProtectedRoute = () => {
+interface ProtectedRouteProps {
+  requiredRole?: Exclude<UserRole, 'guest'>
+}
+
+export const ProtectedRoute = ({ requiredRole }: ProtectedRouteProps) => {
   const location = useLocation()
-  const { isAuthenticated } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth)
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+
+  if (requiredRole && !user) {
+    return <AppLoader label="Checking access..." />
+  }
+
+  if (requiredRole && user?.role !== requiredRole) {
+    return <Navigate to="/" replace />
   }
 
   return <Outlet />

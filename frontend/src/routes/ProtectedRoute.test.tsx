@@ -12,8 +12,9 @@ import placesReducer from '@/store/slices/placesSlice'
 import productsReducer from '@/store/slices/productsSlice'
 import recommendationsReducer from '@/store/slices/recommendationsSlice'
 import userReducer from '@/store/slices/userSlice'
+import type { UserRole } from '@/types/domain'
 
-const createTestStore = (isAuthenticated: boolean) => {
+const createTestStore = (isAuthenticated: boolean, role: UserRole = 'customer') => {
   const authState: ReturnType<typeof authReducer> = {
     token: isAuthenticated ? 'token' : null,
     refreshToken: isAuthenticated ? 'refresh' : null,
@@ -24,7 +25,7 @@ const createTestStore = (isAuthenticated: boolean) => {
           fullName: 'User',
           email: 'user@test.local',
           isEmailVerified: true,
-          role: 'customer',
+          role,
         }
       : null,
     isAuthenticated,
@@ -51,16 +52,17 @@ const createTestStore = (isAuthenticated: boolean) => {
   })
 }
 
-const renderRoute = (isAuthenticated: boolean) => {
-  const store = createTestStore(isAuthenticated)
+const renderRoute = (isAuthenticated: boolean, requiredRole?: Exclude<UserRole, 'guest'>, role: UserRole = 'customer') => {
+  const store = createTestStore(isAuthenticated, role)
   return render(
     <Provider store={store}>
       <MemoryRouter initialEntries={['/secure']}>
         <Routes>
-          <Route element={<ProtectedRoute />}>
+          <Route element={<ProtectedRoute requiredRole={requiredRole} />}>
             <Route path="/secure" element={<div>Secure page</div>} />
           </Route>
           <Route path="/login" element={<div>Login page</div>} />
+          <Route path="/" element={<div>Home page</div>} />
         </Routes>
       </MemoryRouter>
     </Provider>,
@@ -75,6 +77,16 @@ describe('ProtectedRoute', () => {
 
   it('allows access for authenticated user', () => {
     renderRoute(true)
+    expect(screen.getByText('Secure page')).toBeInTheDocument()
+  })
+
+  it('redirects non-admin user away from admin route', () => {
+    renderRoute(true, 'admin', 'customer')
+    expect(screen.getByText('Home page')).toBeInTheDocument()
+  })
+
+  it('allows admin user to access admin route', () => {
+    renderRoute(true, 'admin', 'admin')
     expect(screen.getByText('Secure page')).toBeInTheDocument()
   })
 })

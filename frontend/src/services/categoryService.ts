@@ -6,6 +6,7 @@ import { normalizeCategory } from '@/utils/normalize'
 interface CategoryPayload {
   name: string
   slug?: string
+  parentId?: string
 }
 
 const flattenCategories = (nodes: unknown[]): Category[] => {
@@ -38,19 +39,24 @@ export const categoryService = {
   },
 
   async createCategory(_payload: CategoryPayload): Promise<Category> {
-    void _payload
-    throw new Error('Category creation is not supported by current backend API')
+    const response = await apiClient.post('/v1/admin/categories', {
+      name: _payload.name,
+      slug: _payload.slug,
+      parent_id: _payload.parentId || undefined,
+    })
+    return normalizeCategory(pickData(response.data))
   },
 
   async updateCategory(_id: string, _payload: Partial<CategoryPayload>): Promise<Category> {
-    void _id
-    void _payload
-    throw new Error('Category update is not supported by current backend API')
+    const response = await apiClient.patch(`/v1/admin/categories/${_id}`, {
+      name: _payload.name,
+      slug: _payload.slug,
+      parent_id: _payload.parentId || undefined,
+    })
+    return normalizeCategory(pickData(response.data))
   },
 
   async deleteCategory(_id: string): Promise<void> {
-    void _id
-    throw new Error('Category deletion is not supported by current backend API')
+    await apiClient.delete(`/v1/admin/categories/${_id}`)
   },
 }
-

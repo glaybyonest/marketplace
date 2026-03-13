@@ -51,14 +51,16 @@ type Product struct {
 
 // ProductFilter describes catalog list query.
 type ProductFilter struct {
-	CategoryID *uuid.UUID
-	Query      string
-	MinPrice   *float64
-	MaxPrice   *float64
-	InStock    *bool
-	Page       int
-	Limit      int
-	Sort       string
+	CategoryID      *uuid.UUID
+	Query           string
+	MinPrice        *float64
+	MaxPrice        *float64
+	InStock         *bool
+	IsActive        *bool
+	IncludeInactive bool
+	Page            int
+	Limit           int
+	Sort            string
 }
 
 type SearchSuggestion struct {

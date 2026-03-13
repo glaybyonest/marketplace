@@ -22,13 +22,13 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) Create(ctx context.Context, input usecase.CreateUserInput) (domain.User, error) {
 	const q = `
-		INSERT INTO users (email, password_hash, full_name, email_verified_at)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, email, password_hash, full_name, created_at, updated_at, is_active, email_verified_at
+		INSERT INTO users (email, password_hash, full_name, role, email_verified_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, email, password_hash, full_name, role, created_at, updated_at, is_active, email_verified_at
 	`
 
 	var user domain.User
-	err := scanUser(r.db.QueryRow(ctx, q, input.Email, input.PasswordHash, input.FullName, input.EmailVerifiedAt), &user)
+	err := scanUser(r.db.QueryRow(ctx, q, input.Email, input.PasswordHash, input.FullName, input.Role, input.EmailVerifiedAt), &user)
 	if err != nil {
 		return domain.User{}, mapError(err)
 	}
@@ -37,7 +37,7 @@ func (r *UserRepository) Create(ctx context.Context, input usecase.CreateUserInp
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (domain.User, error) {
 	const q = `
-		SELECT id, email, password_hash, full_name, created_at, updated_at, is_active, email_verified_at
+		SELECT id, email, password_hash, full_name, role, created_at, updated_at, is_active, email_verified_at
 		FROM users
 		WHERE email = $1
 	`
@@ -52,7 +52,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (domain.U
 
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
 	const q = `
-		SELECT id, email, password_hash, full_name, created_at, updated_at, is_active, email_verified_at
+		SELECT id, email, password_hash, full_name, role, created_at, updated_at, is_active, email_verified_at
 		FROM users
 		WHERE id = $1
 	`
@@ -70,7 +70,7 @@ func (r *UserRepository) UpdateFullName(ctx context.Context, id uuid.UUID, fullN
 		UPDATE users
 		SET full_name = $2
 		WHERE id = $1
-		RETURNING id, email, password_hash, full_name, created_at, updated_at, is_active, email_verified_at
+		RETURNING id, email, password_hash, full_name, role, created_at, updated_at, is_active, email_verified_at
 	`
 
 	var user domain.User
@@ -101,7 +101,7 @@ func (r *UserRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID, ve
 		UPDATE users
 		SET email_verified_at = $2
 		WHERE id = $1
-		RETURNING id, email, password_hash, full_name, created_at, updated_at, is_active, email_verified_at
+		RETURNING id, email, password_hash, full_name, role, created_at, updated_at, is_active, email_verified_at
 	`
 
 	var user domain.User
@@ -112,12 +112,26 @@ func (r *UserRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID, ve
 	return user, nil
 }
 
+func (r *UserRepository) PromoteAdminsByEmail(ctx context.Context, emails []string) error {
+	if len(emails) == 0 {
+		return nil
+	}
+
+	_, err := r.db.Exec(ctx, `
+		UPDATE users
+		SET role = 'admin'
+		WHERE email = ANY($1)
+	`, emails)
+	return mapError(err)
+}
+
 func scanUser(row pgx.Row, user *domain.User) error {
 	err := row.Scan(
 		&user.ID,
 		&user.Email,
 		&user.PasswordHash,
 		&user.FullName,
+		&user.Role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.IsActive,
@@ -125,6 +139,9 @@ func scanUser(row pgx.Row, user *domain.User) error {
 	)
 	if err != nil {
 		return err
+	}
+	if user.Role == "" {
+		user.Role = domain.UserRoleCustomer
 	}
 	user.IsEmailVerified = user.EmailVerifiedAt != nil
 	return nil

@@ -23,7 +23,7 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
   const backendMessage = axiosError.response?.data?.error?.message
 
   if (backendCode === 'conflict') {
-    return 'A user with this email already exists'
+    return 'This operation conflicts with existing data'
   }
 
   if (backendCode === 'invalid_input') {
@@ -44,6 +44,14 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
 
   if (backendCode === 'inactive_user') {
     return 'This account is inactive'
+  }
+
+  if (backendCode === 'forbidden') {
+    return 'You do not have access to this section'
+  }
+
+  if (backendCode === 'not_found') {
+    return 'Resource not found'
   }
 
   if (backendCode === 'session_closed') {

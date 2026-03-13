@@ -267,3 +267,39 @@ Search endpoints:
 
 ## Лицензия
 Внутренний / учебный проект.
+
+## Admin Backoffice
+
+Для доступа к административному интерфейсу укажите email администратора в `.env`:
+
+```env
+ADMIN_EMAILS=admin@example.com
+```
+
+Как это работает:
+- при старте backend все пользователи из `ADMIN_EMAILS` получают роль `admin`
+- если новый пользователь регистрируется с email из `ADMIN_EMAILS`, он тоже создаётся как `admin`
+- после входа администратору становятся доступны маршруты frontend:
+  - `/admin`
+  - `/admin/categories`
+  - `/admin/products`
+
+Административные endpoints:
+- `GET /api/v1/admin/categories`
+- `POST /api/v1/admin/categories`
+- `PATCH /api/v1/admin/categories/{id}`
+- `DELETE /api/v1/admin/categories/{id}`
+- `GET /api/v1/admin/products`
+- `POST /api/v1/admin/products`
+- `PATCH /api/v1/admin/products/{id}`
+- `PATCH /api/v1/admin/products/{id}/stock`
+- `DELETE /api/v1/admin/products/{id}`
+
+Что поддерживает админка:
+- CRUD категорий
+- CRUD товаров
+- изменение остатков
+- скрытие товара из публичного каталога через `is_active`
+
+Для применения роли и admin API нужна миграция:
+- `00009_admin_backoffice.sql`

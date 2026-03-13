@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/handlers"
 	httpmw "marketplace-backend/internal/http/middleware"
 	"marketplace-backend/internal/security"
@@ -19,6 +20,7 @@ type Dependencies struct {
 	DB                     *pgxpool.Pool
 	JWTManager             *security.JWTManager
 	AuthService            *usecase.AuthService
+	AdminService           *usecase.AdminService
 	CatalogService         *usecase.CatalogService
 	CartService            *usecase.CartService
 	OrdersService          *usecase.OrdersService
@@ -38,6 +40,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	authMiddleware := httpmw.NewAuth(deps.JWTManager)
 
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
+	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	catalogHandler := handlers.NewCatalogHandler(deps.CatalogService)
 	cartHandler := handlers.NewCartHandler(deps.CartService)
 	ordersHandler := handlers.NewOrdersHandler(deps.OrdersService)
@@ -104,6 +107,22 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Get("/orders/{id}", ordersHandler.GetByID)
 
 			r.Get("/recommendations", recommendationsHandler.List)
+		})
+
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(authMiddleware.Handler)
+			r.Use(httpmw.RequireRole(domain.UserRoleAdmin))
+
+			r.Get("/categories", adminHandler.CategoriesList)
+			r.Post("/categories", adminHandler.CategoryCreate)
+			r.Patch("/categories/{id}", adminHandler.CategoryUpdate)
+			r.Delete("/categories/{id}", adminHandler.CategoryDelete)
+
+			r.Get("/products", adminHandler.ProductsList)
+			r.Post("/products", adminHandler.ProductCreate)
+			r.Patch("/products/{id}", adminHandler.ProductUpdate)
+			r.Patch("/products/{id}/stock", adminHandler.ProductUpdateStock)
+			r.Delete("/products/{id}", adminHandler.ProductDelete)
 		})
 	})
 

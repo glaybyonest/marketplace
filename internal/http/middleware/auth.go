@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/response"
 	"marketplace-backend/internal/security"
 )
@@ -42,6 +43,11 @@ func (a *Auth) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(WithAuth(r.Context(), userID, claims.Email)))
+		role := domain.UserRole(strings.TrimSpace(claims.Role))
+		if role == "" {
+			role = domain.UserRoleCustomer
+		}
+
+		next.ServeHTTP(w, r.WithContext(WithAuth(r.Context(), userID, claims.Email, role)))
 	})
 }

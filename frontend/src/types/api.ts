@@ -31,6 +31,7 @@ export interface ProductFilters {
   min_price?: number
   max_price?: number
   in_stock?: boolean
+  is_active?: boolean
   sort?: ProductSort
   page?: number
   limit?: number
@@ -40,5 +41,6 @@ export interface ProductFilters {
   minPrice?: number
   maxPrice?: number
   inStock?: boolean
+  isActive?: boolean
   pageSize?: number
 }

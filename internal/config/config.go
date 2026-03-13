@@ -18,6 +18,7 @@ type Config struct {
 	JWTSecret        string
 	AppBaseURL       string
 	MailFrom         string
+	AdminEmails      []string
 	AccessTokenTTL   time.Duration
 	RefreshTokenTTL  time.Duration
 	EmailVerifyTTL   time.Duration
@@ -38,6 +39,7 @@ type rawConfig struct {
 	RefreshTokenTTL  string `validate:"required"`
 	EmailVerifyTTL   string `validate:"required"`
 	PasswordResetTTL string `validate:"required"`
+	AdminEmails      string
 	LogLevel         string `validate:"required,oneof=debug info warn error"`
 	ReadTimeout      string `validate:"required"`
 	WriteTimeout     string `validate:"required"`
@@ -52,6 +54,7 @@ func Load() (Config, error) {
 		JWTSecret:        env("JWT_SECRET", ""),
 		AppBaseURL:       env("APP_BASE_URL", "http://localhost:5173"),
 		MailFrom:         env("MAIL_FROM", "no-reply@marketplace.local"),
+		AdminEmails:      env("ADMIN_EMAILS", ""),
 		AccessTokenTTL:   env("ACCESS_TOKEN_TTL", "15m"),
 		RefreshTokenTTL:  env("REFRESH_TOKEN_TTL", "720h"),
 		EmailVerifyTTL:   env("EMAIL_VERIFY_TTL", "24h"),
@@ -108,6 +111,7 @@ func Load() (Config, error) {
 		JWTSecret:        raw.JWTSecret,
 		AppBaseURL:       raw.AppBaseURL,
 		MailFrom:         raw.MailFrom,
+		AdminEmails:      parseEmailList(raw.AdminEmails),
 		AccessTokenTTL:   accessTTL,
 		RefreshTokenTTL:  refreshTTL,
 		EmailVerifyTTL:   emailVerifyTTL,
@@ -136,4 +140,26 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func parseEmailList(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		email := strings.ToLower(strings.TrimSpace(part))
+		if email == "" {
+			continue
+		}
+		if _, exists := seen[email]; exists {
+			continue
+		}
+		seen[email] = struct{}{}
+		result = append(result, email)
+	}
+	return result
 }

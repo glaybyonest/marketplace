@@ -70,14 +70,14 @@ func TestAuthHandler(t *testing.T) {
 	stub := &authServiceStub{
 		registerFn: func(ctx context.Context, input usecase.RegisterInput) (domain.AuthResult, error) {
 			return domain.AuthResult{
-				User:                      domain.User{ID: userID, Email: input.Email},
+				User:                      domain.User{ID: userID, Email: input.Email, Role: domain.UserRoleCustomer},
 				RequiresEmailVerification: true,
 				Message:                   "verification email sent",
 			}, nil
 		},
 		loginFn: func(ctx context.Context, input usecase.LoginInput) (domain.AuthResult, error) {
 			return domain.AuthResult{
-				User: domain.User{ID: userID, Email: input.Email},
+				User: domain.User{ID: userID, Email: input.Email, Role: domain.UserRoleCustomer},
 				Tokens: &domain.TokenPair{
 					AccessToken:  "a",
 					RefreshToken: "r",
@@ -90,11 +90,11 @@ func TestAuthHandler(t *testing.T) {
 		},
 		logoutFn: func(ctx context.Context, input usecase.LogoutInput) error { return nil },
 		meFn: func(ctx context.Context, userID uuid.UUID) (domain.User, error) {
-			return domain.User{ID: userID, Email: "me@example.com"}, nil
+			return domain.User{ID: userID, Email: "me@example.com", Role: domain.UserRoleCustomer}, nil
 		},
 		requestEmailVerificationFn: func(ctx context.Context, input usecase.VerifyEmailRequestInput) error { return nil },
 		confirmEmailVerificationFn: func(ctx context.Context, input usecase.VerifyEmailConfirmInput) (domain.User, error) {
-			return domain.User{ID: userID, Email: "verified@example.com", IsEmailVerified: true}, nil
+			return domain.User{ID: userID, Email: "verified@example.com", Role: domain.UserRoleCustomer, IsEmailVerified: true}, nil
 		},
 		requestPasswordResetFn: func(ctx context.Context, input usecase.PasswordResetRequestInput) error { return nil },
 		confirmPasswordResetFn: func(ctx context.Context, input usecase.PasswordResetConfirmInput) error { return nil },
@@ -171,7 +171,7 @@ func TestAuthHandler(t *testing.T) {
 
 	t.Run("me success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/me", nil)
-		req = req.WithContext(httpmw.WithAuth(req.Context(), userID, "me@example.com"))
+		req = req.WithContext(httpmw.WithAuth(req.Context(), userID, "me@example.com", domain.UserRoleCustomer))
 		rec := httptest.NewRecorder()
 		handler.Me(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)

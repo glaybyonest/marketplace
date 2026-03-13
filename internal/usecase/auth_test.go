@@ -42,6 +42,7 @@ func (m *authUserRepoMock) Create(ctx context.Context, input CreateUserInput) (d
 		ID:              uuid.New(),
 		Email:           input.Email,
 		PasswordHash:    input.PasswordHash,
+		Role:            input.Role,
 		CreatedAt:       m.state.now(),
 		UpdatedAt:       m.state.now(),
 		IsActive:        true,
@@ -260,12 +261,12 @@ type jwtMock struct {
 	fail error
 }
 
-func (j *jwtMock) Generate(userID uuid.UUID, email string) (string, time.Time, error) {
+func (j *jwtMock) Generate(userID uuid.UUID, email string, role domain.UserRole) (string, time.Time, error) {
 	if j.fail != nil {
 		return "", time.Time{}, j.fail
 	}
 	now := time.Now().UTC()
-	return "access-" + userID.String(), now.Add(15 * time.Minute), nil
+	return "access-" + userID.String() + "-" + string(role), now.Add(15 * time.Minute), nil
 }
 
 func extractActionToken(t *testing.T, messages []mailer.Message, subject string) string {
@@ -316,6 +317,7 @@ func TestAuthService(t *testing.T) {
 		messageSender,
 		"http://localhost:5173",
 		"no-reply@marketplace.local",
+		[]string{"admin@example.com"},
 		30*24*time.Hour,
 		24*time.Hour,
 		time.Hour,
@@ -332,6 +334,7 @@ func TestAuthService(t *testing.T) {
 		assert.True(t, result.RequiresEmailVerification)
 		assert.Nil(t, result.Tokens)
 		assert.False(t, result.User.IsEmailVerified)
+		assert.Equal(t, domain.UserRoleCustomer, result.User.Role)
 		require.Len(t, state.sentMessages, 1)
 		assert.Contains(t, state.sentMessages[0].Text, "http://localhost:5173/verify-email?token=")
 
@@ -341,6 +344,16 @@ func TestAuthService(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrEmailNotVerified)
+	})
+
+	t.Run("register allowlisted admin", func(t *testing.T) {
+		result, err := service.Register(context.Background(), RegisterInput{
+			Email:    "admin@example.com",
+			Password: "StrongPass1",
+			FullName: "Admin User",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, domain.UserRoleAdmin, result.User.Role)
 	})
 
 	t.Run("verify email and login", func(t *testing.T) {
@@ -379,13 +392,14 @@ func TestAuthService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		oldRefreshToken := loginResult.Tokens.RefreshToken
+		messageCountBefore := len(state.sentMessages)
 
 		err = service.RequestPasswordReset(context.Background(), PasswordResetRequestInput{
 			Email: "user@example.com",
 		})
 		require.NoError(t, err)
-		require.Len(t, state.sentMessages, 2)
-		assert.Contains(t, state.sentMessages[1].Text, "http://localhost:5173/reset-password?token=")
+		require.Len(t, state.sentMessages, messageCountBefore+1)
+		assert.Contains(t, state.sentMessages[len(state.sentMessages)-1].Text, "http://localhost:5173/reset-password?token=")
 
 		resetToken := extractActionToken(t, state.sentMessages, "Reset your password")
 		require.NoError(t, service.ConfirmPasswordReset(context.Background(), PasswordResetConfirmInput{

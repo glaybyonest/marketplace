@@ -5,12 +5,21 @@ import type { PopularSearch, Product, SearchSuggestion } from '@/types/domain'
 import { normalizeProduct } from '@/utils/normalize'
 
 interface ProductPayload {
-  title: string
+  title?: string
+  name?: string
+  slug?: string
   description: string
   price: number
   categoryId: string
+  currency?: string
+  sku?: string
+  imageUrl?: string
   stock?: number
   images?: string[]
+  brand?: string
+  unit?: string
+  specs?: Product['specs']
+  isActive?: boolean
 }
 
 const toProductList = (raw: unknown): PaginatedResponse<Product> => {
@@ -29,6 +38,7 @@ const mapFilters = (filters: ProductFilters = {}) => {
   const minPrice = filters.min_price ?? filters.minPrice
   const maxPrice = filters.max_price ?? filters.maxPrice
   const inStock = filters.in_stock ?? filters.inStock
+  const isActive = filters.is_active ?? filters.isActive
   const limit = filters.limit ?? filters.pageSize
 
   if (q) {
@@ -49,6 +59,9 @@ const mapFilters = (filters: ProductFilters = {}) => {
   if (typeof inStock === 'boolean') {
     params.in_stock = inStock
   }
+  if (typeof isActive === 'boolean') {
+    params.is_active = isActive
+  }
   if (filters.page) {
     params.page = filters.page
   }
@@ -58,6 +71,23 @@ const mapFilters = (filters: ProductFilters = {}) => {
 
   return params
 }
+
+const toProductRequestBody = (payload: ProductPayload) => ({
+  category_id: payload.categoryId,
+  name: payload.name ?? payload.title ?? 'Product',
+  slug: payload.slug,
+  description: payload.description,
+  price: payload.price,
+  currency: payload.currency,
+  sku: payload.sku,
+  image_url: payload.imageUrl,
+  images: payload.images ?? [],
+  brand: payload.brand,
+  unit: payload.unit,
+  specs: payload.specs ?? {},
+  stock_qty: payload.stock ?? 0,
+  is_active: payload.isActive,
+})
 
 export const productService = {
   async getProducts(filters: ProductFilters = {}): Promise<PaginatedResponse<Product>> {
@@ -107,19 +137,46 @@ export const productService = {
     return normalizeProduct(pickData(response.data))
   },
 
-  async createProduct(_payload: ProductPayload): Promise<Product> {
-    void _payload
-    throw new Error('Product creation is not supported by current backend API')
+  async getAdminProducts(filters: ProductFilters = {}): Promise<PaginatedResponse<Product>> {
+    const response = await apiClient.get('/v1/admin/products', { params: mapFilters(filters) })
+    return toProductList(response.data)
   },
 
-  async updateProduct(_id: string, _payload: Partial<ProductPayload>): Promise<Product> {
-    void _id
-    void _payload
-    throw new Error('Product update is not supported by current backend API')
+  async createProduct(payload: ProductPayload): Promise<Product> {
+    const response = await apiClient.post('/v1/admin/products', toProductRequestBody(payload))
+    return normalizeProduct(pickData(response.data))
   },
 
-  async deleteProduct(_id: string): Promise<void> {
-    void _id
-    throw new Error('Product deletion is not supported by current backend API')
+  async updateProduct(id: string, payload: Partial<ProductPayload>): Promise<Product> {
+    const current = payload as ProductPayload
+    const response = await apiClient.patch(`/v1/admin/products/${id}`, toProductRequestBody({
+      title: current.title,
+      name: current.name,
+      slug: current.slug,
+      description: current.description ?? '',
+      price: current.price ?? 0,
+      categoryId: current.categoryId ?? '',
+      currency: current.currency,
+      sku: current.sku,
+      imageUrl: current.imageUrl,
+      stock: current.stock,
+      images: current.images,
+      brand: current.brand,
+      unit: current.unit,
+      specs: current.specs,
+      isActive: current.isActive,
+    }))
+    return normalizeProduct(pickData(response.data))
+  },
+
+  async updateProductStock(id: string, stockQty: number): Promise<Product> {
+    const response = await apiClient.patch(`/v1/admin/products/${id}/stock`, {
+      stock_qty: stockQty,
+    })
+    return normalizeProduct(pickData(response.data))
+  },
+
+  async deleteProduct(id: string): Promise<void> {
+    await apiClient.delete(`/v1/admin/products/${id}`)
   },
 }

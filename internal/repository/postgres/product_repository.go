@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"marketplace-backend/internal/domain"
+	"marketplace-backend/internal/usecase"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -43,7 +44,10 @@ func NewProductRepository(db *pgxpool.Pool) *ProductRepository {
 }
 
 func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error) {
-	where := []string{"p.is_active = TRUE"}
+	where := make([]string, 0, 8)
+	if !filter.IncludeInactive {
+		where = append(where, "p.is_active = TRUE")
+	}
 	args := make([]any, 0, 8)
 
 	if filter.CategoryID != nil {
@@ -76,8 +80,15 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 			where = append(where, "p.stock_qty >= 0")
 		}
 	}
+	if filter.IsActive != nil {
+		args = append(args, *filter.IsActive)
+		where = append(where, fmt.Sprintf("p.is_active = $%d", len(args)))
+	}
 
-	condition := strings.Join(where, " AND ")
+	condition := "TRUE"
+	if len(where) > 0 {
+		condition = strings.Join(where, " AND ")
+	}
 	countSQL := "SELECT COUNT(*) FROM products p INNER JOIN categories c ON c.id = p.category_id WHERE " + condition
 
 	var total int
@@ -135,33 +146,19 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 }
 
 func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
-	row := r.db.QueryRow(ctx, `
-		SELECT `+productSelectColumns+`
-		FROM products p
-		INNER JOIN categories c ON c.id = p.category_id
-		WHERE id = $1 AND is_active = TRUE
-	`, id)
-
-	var product domain.Product
-	if err := scanProduct(row, &product); err != nil {
-		return domain.Product{}, mapError(err)
-	}
-	return product, nil
+	return r.getByCondition(ctx, "p.id = $1", id, false)
 }
 
 func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (domain.Product, error) {
-	row := r.db.QueryRow(ctx, `
-		SELECT `+productSelectColumns+`
-		FROM products p
-		INNER JOIN categories c ON c.id = p.category_id
-		WHERE slug = $1 AND is_active = TRUE
-	`, slug)
+	return r.getByCondition(ctx, "p.slug = $1", slug, false)
+}
 
-	var product domain.Product
-	if err := scanProduct(row, &product); err != nil {
-		return domain.Product{}, mapError(err)
-	}
-	return product, nil
+func (r *ProductRepository) GetByIDAny(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+	return r.getByCondition(ctx, "p.id = $1", id, true)
+}
+
+func (r *ProductRepository) GetBySlugAny(ctx context.Context, slug string) (domain.Product, error) {
+	return r.getByCondition(ctx, "p.slug = $1", slug, true)
 }
 
 func (r *ProductRepository) SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error) {
@@ -285,6 +282,135 @@ func (r *ProductRepository) TrackSearchQuery(ctx context.Context, query string) 
 	return mapError(err)
 }
 
+func (r *ProductRepository) Create(ctx context.Context, input usecase.ProductWriteInput) (domain.Product, error) {
+	galleryRaw, specsRaw, err := marshalProductMetadata(input.Gallery, input.Specs)
+	if err != nil {
+		return domain.Product{}, err
+	}
+
+	row := r.db.QueryRow(ctx, `
+		WITH inserted AS (
+			INSERT INTO products (
+				category_id,
+				name,
+				slug,
+				description,
+				price,
+				currency,
+				sku,
+				image_url,
+				gallery,
+				brand,
+				unit,
+				specs,
+				stock_qty,
+				is_active
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12::jsonb, $13, $14)
+			RETURNING id
+		)
+		SELECT `+productSelectColumns+`
+		FROM products p
+		INNER JOIN categories c ON c.id = p.category_id
+		WHERE p.id = (SELECT id FROM inserted)
+	`, input.CategoryID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, input.ImageURL, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive)
+
+	var product domain.Product
+	if err := scanProduct(row, &product); err != nil {
+		return domain.Product{}, mapError(err)
+	}
+	return product, nil
+}
+
+func (r *ProductRepository) Update(ctx context.Context, input usecase.ProductWriteInput) (domain.Product, error) {
+	galleryRaw, specsRaw, err := marshalProductMetadata(input.Gallery, input.Specs)
+	if err != nil {
+		return domain.Product{}, err
+	}
+
+	row := r.db.QueryRow(ctx, `
+		UPDATE products p
+		SET
+			category_id = $2,
+			name = $3,
+			slug = $4,
+			description = $5,
+			price = $6,
+			currency = $7,
+			sku = $8,
+			image_url = $9,
+			gallery = $10::jsonb,
+			brand = $11,
+			unit = $12,
+			specs = $13::jsonb,
+			stock_qty = $14,
+			is_active = $15
+		FROM categories c
+		WHERE p.id = $1
+		  AND c.id = $2
+		RETURNING `+productSelectColumns+`
+	`, input.ID, input.CategoryID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, input.ImageURL, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive)
+
+	var product domain.Product
+	if err := scanProduct(row, &product); err != nil {
+		return domain.Product{}, mapError(err)
+	}
+	return product, nil
+}
+
+func (r *ProductRepository) SetActive(ctx context.Context, id uuid.UUID, isActive bool) (domain.Product, error) {
+	row := r.db.QueryRow(ctx, `
+		UPDATE products p
+		SET is_active = $2
+		FROM categories c
+		WHERE p.id = $1
+		  AND c.id = p.category_id
+		RETURNING `+productSelectColumns+`
+	`, id, isActive)
+
+	var product domain.Product
+	if err := scanProduct(row, &product); err != nil {
+		return domain.Product{}, mapError(err)
+	}
+	return product, nil
+}
+
+func (r *ProductRepository) UpdateStock(ctx context.Context, id uuid.UUID, stockQty int) (domain.Product, error) {
+	row := r.db.QueryRow(ctx, `
+		UPDATE products p
+		SET stock_qty = $2
+		FROM categories c
+		WHERE p.id = $1
+		  AND c.id = p.category_id
+		RETURNING `+productSelectColumns+`
+	`, id, stockQty)
+
+	var product domain.Product
+	if err := scanProduct(row, &product); err != nil {
+		return domain.Product{}, mapError(err)
+	}
+	return product, nil
+}
+
+func (r *ProductRepository) getByCondition(ctx context.Context, condition string, arg any, includeInactive bool) (domain.Product, error) {
+	where := condition
+	if !includeInactive {
+		where += " AND p.is_active = TRUE"
+	}
+
+	row := r.db.QueryRow(ctx, `
+		SELECT `+productSelectColumns+`
+		FROM products p
+		INNER JOIN categories c ON c.id = p.category_id
+		WHERE `+where, arg)
+
+	var product domain.Product
+	if err := scanProduct(row, &product); err != nil {
+		return domain.Product{}, mapError(err)
+	}
+	return product, nil
+}
+
 func scanProduct(row pgx.Row, product *domain.Product) error {
 	var galleryRaw []byte
 	var specsRaw []byte
@@ -326,6 +452,32 @@ func scanProduct(row pgx.Row, product *domain.Product) error {
 	product.Specs = specs
 
 	return nil
+}
+
+func marshalProductMetadata(gallery []string, specs map[string]any) ([]byte, []byte, error) {
+	normalizedGallery := make([]string, 0, len(gallery))
+	for _, image := range gallery {
+		image = strings.TrimSpace(image)
+		if image == "" {
+			continue
+		}
+		normalizedGallery = append(normalizedGallery, image)
+	}
+
+	galleryRaw, err := json.Marshal(normalizedGallery)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode product gallery: %w", err)
+	}
+
+	if specs == nil {
+		specs = map[string]any{}
+	}
+	specsRaw, err := json.Marshal(specs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode product specs: %w", err)
+	}
+
+	return galleryRaw, specsRaw, nil
 }
 
 func decodeProductImages(imageURL string, galleryRaw []byte) ([]string, error) {

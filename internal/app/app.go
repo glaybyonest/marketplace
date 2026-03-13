@@ -57,6 +57,11 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	passwordManager := security.NewPasswordManager()
 	logMailer := mailer.NewLogSender(logger)
 
+	if err := userRepo.PromoteAdminsByEmail(ctx, cfg.AdminEmails); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("promote admin users: %w", err)
+	}
+
 	authService := usecase.NewAuthService(
 		userRepo,
 		sessionRepo,
@@ -66,10 +71,12 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		logMailer,
 		cfg.AppBaseURL,
 		cfg.MailFrom,
+		cfg.AdminEmails,
 		cfg.RefreshTokenTTL,
 		cfg.EmailVerifyTTL,
 		cfg.PasswordResetTTL,
 	)
+	adminService := usecase.NewAdminService(categoryRepo, productRepo)
 	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
 	cartService := usecase.NewCartService(cartRepo, productRepo)
 	ordersService := usecase.NewOrdersService(orderRepo, placeRepo)
@@ -83,6 +90,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		DB:                     db,
 		JWTManager:             jwtManager,
 		AuthService:            authService,
+		AdminService:           adminService,
 		CatalogService:         catalogService,
 		CartService:            cartService,
 		OrdersService:          ordersService,

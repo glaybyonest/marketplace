@@ -24,6 +24,10 @@ const privateItems: NavItem[] = [
   { to: '/account/places', label: 'Places' },
 ]
 
+const adminItems: NavItem[] = [
+  { to: '/admin', label: 'Admin' },
+]
+
 export const Header = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -32,8 +36,16 @@ export const Header = () => {
   const cartTotalItems = useAppSelector((state) => state.cart.totalItems)
 
   const navItems = useMemo(() => {
-    return auth.isAuthenticated ? [...publicItems, ...privateItems] : publicItems
-  }, [auth.isAuthenticated])
+    if (!auth.isAuthenticated) {
+      return publicItems
+    }
+
+    if (auth.user?.role === 'admin') {
+      return [...publicItems, ...privateItems, ...adminItems]
+    }
+
+    return [...publicItems, ...privateItems]
+  }, [auth.isAuthenticated, auth.user?.role])
 
   useEffect(() => {
     if (auth.isAuthenticated) {
