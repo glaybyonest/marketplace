@@ -3,6 +3,8 @@ name: cd
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       run_migrations:
@@ -19,7 +21,25 @@ env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/marketplace-backend-api
 
 jobs:
+  validate-deploy-config:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate production docker compose
+        run: ENV_FILE=.env.production.example docker compose --env-file .env.production.example -f docker-compose.prod.yml config >/dev/null
+
+      - name: Validate deploy scripts are present
+        run: |
+          test -f scripts/deploy-prod.sh
+          test -f scripts/backup-postgres.sh
+          test -f scripts/restore-postgres.sh
+          test -f scripts/prune-backups.sh
+
   build-and-publish:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
 
     steps:
