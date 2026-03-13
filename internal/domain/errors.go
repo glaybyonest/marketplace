@@ -11,4 +11,7 @@ var (
 	ErrInactiveUser  = errors.New("inactive user")
 	ErrTokenReused   = errors.New("refresh token already used")
 	ErrSessionClosed = errors.New("session is closed")
+	ErrCartEmpty     = errors.New("cart is empty")
+	ErrStockShortage = errors.New("insufficient stock")
+	ErrUnavailable   = errors.New("product unavailable")
 )

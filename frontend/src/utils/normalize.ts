@@ -119,13 +119,24 @@ export const normalizeReview = (input: unknown): Review => {
 
 export const normalizeCartItem = (input: unknown): CartItem => {
   const source = asRecord(input)
+  const productId = pickString(source.product_id, pickString(source.productId, pickString(source.id, createId())))
+  const lineTotal = pickNumber(
+    source.line_total,
+    pickNumber(source.lineTotal, pickNumber(source.total, pickNumber(source.price) * pickNumber(source.quantity, 1))),
+  )
   return {
-    id: pickString(source.id, pickString(source._id, createId())),
-    productId: pickString(source.productId),
-    title: pickString(source.title, pickString(source.productTitle, 'Product')),
+    id: pickString(source.id, pickString(source._id, productId)),
+    productId,
+    title: pickString(source.title, pickString(source.product_name, pickString(source.name, pickString(source.productTitle, 'Product')))),
+    slug: pickString(source.slug),
+    sku: pickString(source.sku),
     imageUrl: pickString(source.imageUrl, pickString(source.image)),
-    price: pickNumber(source.price),
+    price: pickNumber(source.unit_price, pickNumber(source.price)),
     quantity: pickNumber(source.quantity, 1),
+    lineTotal,
+    currency: pickString(source.currency, 'RUB'),
+    stock: pickNumber(source.stock_qty, pickNumber(source.stock, 0)),
+    isActive: source.is_active === undefined ? true : Boolean(source.is_active),
   }
 }
 
@@ -133,33 +144,32 @@ export const normalizeCart = (input: unknown): Cart => {
   const source = asRecord(input)
   const rawItems = Array.isArray(source.items) ? source.items : []
   const items = rawItems.map(normalizeCartItem)
-  const total = pickNumber(source.total, NaN) || items.reduce((acc, item) => acc + item.price * item.quantity, 0)
+  const total = pickNumber(source.total_amount, pickNumber(source.total, NaN)) || items.reduce((acc, item) => acc + item.lineTotal, 0)
+  const totalItems = pickNumber(source.total_items, NaN) || items.reduce((acc, item) => acc + item.quantity, 0)
   return {
     items,
     total,
     currency: pickString(source.currency, 'RUB'),
+    totalItems,
   }
 }
 
 export const normalizeOrder = (input: unknown): Order => {
   const source = asRecord(input)
   const rawItems = Array.isArray(source.items) ? source.items : []
-  const address = asRecord(source.address)
   return {
     id: pickString(source.id, pickString(source._id, createId())),
     items: rawItems.map(normalizeCartItem),
-    total: pickNumber(source.total),
+    total: pickNumber(source.total_amount, pickNumber(source.total)),
     currency: pickString(source.currency, 'RUB'),
     status: pickString(source.status, 'pending') as Order['status'],
-    createdAt: pickString(source.createdAt, new Date().toISOString()),
-    address: {
-      city: pickString(address.city),
-      street: pickString(address.street),
-      building: pickString(address.building),
-      postalCode: pickString(address.postalCode),
-    },
-    deliveryMethod: pickString(source.deliveryMethod, 'standard'),
-    promoCode: pickString(source.promoCode),
+    createdAt: pickString(source.created_at, pickString(source.createdAt, new Date().toISOString())),
+    updatedAt: pickString(source.updated_at, pickString(source.updatedAt)),
+    placeId: pickString(source.place_id, pickString(source.placeId)),
+    placeTitle: pickString(source.place_title, pickString(source.placeTitle)),
+    addressText: pickString(source.address_text, pickString(source.addressText)),
+    lat: typeof source.lat === 'number' ? source.lat : undefined,
+    lon: typeof source.lon === 'number' ? source.lon : undefined,
   }
 }
 

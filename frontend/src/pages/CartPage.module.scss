@@ -1,0 +1,165 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.header h1,
+.summary h2,
+.empty h2 {
+  margin: 0;
+}
+
+.header p,
+.empty p {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-secondary);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+}
+
+.list,
+.summary,
+.empty {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+  padding: 0.9rem;
+}
+
+.itemTitle {
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.meta {
+  margin: 0.35rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.price {
+  margin: 0;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.controls {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: end;
+}
+
+.quantity {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.quantity button,
+.quantity span {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quantity button {
+  border: none;
+  background: var(--color-soft);
+  cursor: pointer;
+}
+
+.itemActions {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.textButton,
+.secondary {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+}
+
+.summary {
+  align-content: start;
+  display: grid;
+  gap: 1rem;
+}
+
+.summary dl {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.primaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: 0.8rem;
+  padding: 0.8rem 1rem;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.empty {
+  gap: 0.75rem;
+  display: grid;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .item {
+    grid-template-columns: 1fr;
+  }
+
+  .controls,
+  .itemActions {
+    justify-items: start;
+  }
+}

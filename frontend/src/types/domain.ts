@@ -64,25 +64,25 @@ export interface CartItem {
   id: string
   productId: string
   title: string
+  slug?: string
+  sku?: string
   imageUrl?: string
   price: number
   quantity: number
+  lineTotal: number
+  currency?: string
+  stock?: number
+  isActive?: boolean
 }
 
 export interface Cart {
   items: CartItem[]
   total: number
   currency: string
+  totalItems: number
 }
 
-export type OrderStatus = 'pending' | 'processing' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
-
-export interface OrderAddress {
-  city: string
-  street: string
-  building: string
-  postalCode: string
-}
+export type OrderStatus = 'pending' | 'cancelled'
 
 export interface Order {
   id: string
@@ -91,9 +91,12 @@ export interface Order {
   currency: string
   status: OrderStatus
   createdAt: string
-  address: OrderAddress
-  deliveryMethod: string
-  promoCode?: string
+  updatedAt?: string
+  placeId: string
+  placeTitle: string
+  addressText: string
+  lat?: number
+  lon?: number
 }
 
 export interface AdminStats {

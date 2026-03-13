@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLoader } from '@/components/common/AppLoader'
 import { ErrorMessage } from '@/components/common/ErrorMessage'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { addCartItemThunk } from '@/store/slices/cartSlice'
 import { addFavoriteThunk, removeFavoriteThunk } from '@/store/slices/favoritesSlice'
 import { fetchProductByIdThunk } from '@/store/slices/productsSlice'
 import { fetchRecommendationsThunk } from '@/store/slices/recommendationsSlice'
@@ -22,9 +23,11 @@ export const ProductPage = () => {
   const productError = useAppSelector((state) => state.products.error)
   const favoriteItems = useAppSelector((state) => state.favorites.items)
   const favoriteMutationStatus = useAppSelector((state) => state.favorites.mutationStatus)
+  const cartMutationStatus = useAppSelector((state) => state.cart.mutationStatus)
   const recommendations = useAppSelector((state) => state.recommendations.items)
 
   const [selectedImage, setSelectedImage] = useState<string>('')
+  const [quantity, setQuantity] = useState(1)
 
   useEffect(() => {
     if (!id) {
@@ -48,6 +51,7 @@ export const ProductPage = () => {
     ? product.images
     : ['https://placehold.co/500x400?text=No+Image']
   const activeImage = selectedImage && gallery.includes(selectedImage) ? selectedImage : gallery[0]
+  const safeQuantity = Math.min(quantity, Math.max(product?.stock || 1, 1))
 
   const handleToggleFavorite = async () => {
     if (!product) {
@@ -64,6 +68,20 @@ export const ProductPage = () => {
     } else {
       await dispatch(addFavoriteThunk(product.id))
     }
+  }
+
+  const handleAddToCart = async () => {
+    if (!product) {
+      return
+    }
+
+    if (!auth.isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    await dispatch(addCartItemThunk({ productId: product.id, quantity: safeQuantity }))
+    navigate('/cart')
   }
 
   if (detailStatus === 'loading') {
@@ -111,14 +129,47 @@ export const ProductPage = () => {
             <span>{product.stock && product.stock > 0 ? `In stock: ${product.stock}` : 'Out of stock'}</span>
           </div>
 
-          <button
-            type="button"
-            className={styles.cartButton}
-            onClick={handleToggleFavorite}
-            disabled={favoriteMutationStatus === 'loading'}
-          >
-            {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          </button>
+          <div className={styles.quantity}>
+            <span className={styles.quantityLabel}>Quantity</span>
+            <div className={styles.quantityControls}>
+              <button
+                type="button"
+                onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                disabled={safeQuantity <= 1}
+              >
+                -
+              </button>
+              <span>{safeQuantity}</span>
+              <button
+                type="button"
+                onClick={() => setQuantity((current) => Math.min(product.stock || 1, current + 1))}
+                disabled={!product.stock || safeQuantity >= product.stock}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.actionGroup}>
+            <button
+              type="button"
+              className={`${styles.cartButton} ${!product.stock ? styles.cartButtonDisabled : ''}`}
+              onClick={handleAddToCart}
+              disabled={!product.stock || cartMutationStatus === 'loading'}
+            >
+              {cartMutationStatus === 'loading' ? 'Adding...' : 'Add to cart'}
+            </button>
+
+            <button
+              type="button"
+              className={styles.favoriteButton}
+              onClick={handleToggleFavorite}
+              disabled={favoriteMutationStatus === 'loading'}
+            >
+              {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            </button>
+          </div>
+
         </div>
       </section>
 

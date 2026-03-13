@@ -1,6 +1,6 @@
 ﻿# Marketplace Backend
 
-Бэкенд маркетплейса на Go с JWT-аутентификацией, каталогом, избранным, адресами и персональными рекомендациями.
+Бэкенд маркетплейса на Go с JWT-аутентификацией, каталогом, избранным, корзиной, checkout, заказами, адресами и персональными рекомендациями.
 
 ## Требования
 - Docker Desktop 4+
@@ -28,6 +28,16 @@
 - `docker` - init-скрипты PostgreSQL
 - `frontend` - фронтенд, интегрированный с этим API
 - `scripts` - вспомогательные скрипты запуска
+
+## Что уже реализовано
+- JWT auth с access/refresh token и logout/revoke
+- каталог товаров и категории
+- избранное
+- адреса пользователя (`places`)
+- серверная корзина
+- checkout из корзины по сохраненному адресу
+- история заказов
+- персональные рекомендации
 
 ## Переменные окружения
 Создайте `.env` на основе `.env.example` и задайте безопасный `JWT_SECRET`.
@@ -113,6 +123,7 @@ go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "p
 Примечания:
 - `00003_db_hardening.sql` добавляет ограничения целостности и рабочие индексы.
 - `00004_products_search_trgm.sql` добавляет опциональный `pg_trgm` индекс для ускорения `LIKE`-поиска.
+- `00005_cart_orders.sql` добавляет таблицы корзины и заказов: `cart_items`, `orders`, `order_items`.
 
 ## Локальный запуск backend (без Docker API-контейнера)
 1. Поднять только PostgreSQL:
@@ -163,15 +174,31 @@ npm run build
 - `GET /api/v1/favorites`
 - `POST /api/v1/favorites/{product_id}`
 - `DELETE /api/v1/favorites/{product_id}`
+- `GET /api/v1/cart`
+- `POST /api/v1/cart/items`
+- `PATCH /api/v1/cart/items/{product_id}`
+- `DELETE /api/v1/cart/items/{product_id}`
+- `DELETE /api/v1/cart`
 - `POST /api/v1/places`
 - `GET /api/v1/places`
 - `PATCH /api/v1/places/{id}`
 - `DELETE /api/v1/places/{id}`
+- `POST /api/v1/orders`
+- `GET /api/v1/orders`
+- `GET /api/v1/orders/{id}`
 - `GET /api/v1/recommendations`
+
+## Сквозной пользовательский сценарий
+1. Зарегистрироваться или войти.
+2. Добавить один или несколько товаров в корзину.
+3. Создать адрес в `My places`.
+4. Открыть `Checkout`, выбрать адрес и оформить заказ.
+5. Проверить историю в `Orders`.
 
 ## Частые проблемы
 - `404` на `api/api/v1/...`: проверьте, что `VITE_API_BASE_URL=/api`, а запросы в коде идут на `/v1/...`.
 - `400` на `POST /api/v1/auth/register`: пароль должен быть длиной `8-72`, содержать минимум одну латинскую букву и одну цифру; `email` должен быть уникальным.
+- `404` или `500` на корзине/заказах после обновления кода: примените миграции `goose up`, чтобы в БД появились таблицы из `00005_cart_orders.sql`.
 - `css2 ... ERR_TIMED_OUT`: проблема с внешними шрифтами/сетью/кэшем браузера; сделайте hard refresh (`Ctrl+F5`) и перезапустите frontend.
 
 ## Полезные команды

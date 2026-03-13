@@ -60,6 +60,8 @@ export const AccountPage = () => {
         </form>
 
         <nav className={styles.quickLinks}>
+          <Link to="/cart">Cart</Link>
+          <Link to="/account/orders">Orders</Link>
           <Link to="/favorites">Favorites</Link>
           <Link to="/account/places">My places</Link>
         </nav>

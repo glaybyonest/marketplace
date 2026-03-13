@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { logoutThunk } from '@/store/slices/authSlice'
+import { fetchCartThunk } from '@/store/slices/cartSlice'
 
 import styles from '@/components/layout/Header.module.scss'
 
@@ -16,7 +17,9 @@ const publicItems: NavItem[] = [
 ]
 
 const privateItems: NavItem[] = [
+  { to: '/cart', label: 'Cart' },
   { to: '/favorites', label: 'Favorites' },
+  { to: '/account/orders', label: 'Orders' },
   { to: '/account', label: 'Account' },
   { to: '/account/places', label: 'Places' },
 ]
@@ -26,10 +29,17 @@ export const Header = () => {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const auth = useAppSelector((state) => state.auth)
+  const cartTotalItems = useAppSelector((state) => state.cart.totalItems)
 
   const navItems = useMemo(() => {
     return auth.isAuthenticated ? [...publicItems, ...privateItems] : publicItems
   }, [auth.isAuthenticated])
+
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      dispatch(fetchCartThunk())
+    }
+  }, [auth.isAuthenticated, dispatch])
 
   const handleLogout = async () => {
     await dispatch(logoutThunk())
@@ -58,14 +68,26 @@ export const Header = () => {
           aria-label="Main menu"
         >
           {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              {item.label}
-            </NavLink>
+            item.to === '/cart' ? (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `${styles.navLink} ${styles.cartWrapper} ${isActive ? styles.active : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                Cart
+                {cartTotalItems > 0 ? <span className={styles.cartCount}>{cartTotalItems}</span> : null}
+              </NavLink>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                {item.label}
+              </NavLink>
+            )
           ))}
         </nav>
 

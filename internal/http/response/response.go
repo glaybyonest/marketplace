@@ -40,12 +40,18 @@ func FromDomainError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
 		Error(w, http.StatusBadRequest, "invalid_input", "invalid input", nil)
+	case errors.Is(err, domain.ErrCartEmpty):
+		Error(w, http.StatusBadRequest, "cart_empty", "cart is empty", nil)
 	case errors.Is(err, domain.ErrUnauthorized):
 		Error(w, http.StatusUnauthorized, "unauthorized", "unauthorized", nil)
 	case errors.Is(err, domain.ErrInactiveUser):
 		Error(w, http.StatusForbidden, "inactive_user", "user is inactive", nil)
 	case errors.Is(err, domain.ErrForbidden):
 		Error(w, http.StatusForbidden, "forbidden", "forbidden", nil)
+	case errors.Is(err, domain.ErrStockShortage):
+		Error(w, http.StatusConflict, "insufficient_stock", "insufficient stock", nil)
+	case errors.Is(err, domain.ErrUnavailable):
+		Error(w, http.StatusConflict, "product_unavailable", "product unavailable", nil)
 	case errors.Is(err, domain.ErrNotFound):
 		Error(w, http.StatusNotFound, "not_found", "resource not found", nil)
 	case errors.Is(err, domain.ErrConflict):

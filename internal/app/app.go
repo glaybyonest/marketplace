@@ -44,7 +44,9 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	sessionRepo := postgres.NewSessionRepository(db)
 	categoryRepo := postgres.NewCategoryRepository(db)
 	productRepo := postgres.NewProductRepository(db)
+	cartRepo := postgres.NewCartRepository(db)
 	favoriteRepo := postgres.NewFavoriteRepository(db)
+	orderRepo := postgres.NewOrderRepository(db)
 	placeRepo := postgres.NewPlaceRepository(db)
 	eventRepo := postgres.NewEventRepository(db)
 	recommendationRepo := postgres.NewRecommendationRepository(db)
@@ -54,6 +56,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 
 	authService := usecase.NewAuthService(userRepo, sessionRepo, jwtManager, passwordManager, cfg.RefreshTokenTTL)
 	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
+	cartService := usecase.NewCartService(cartRepo, productRepo)
+	ordersService := usecase.NewOrdersService(orderRepo, placeRepo)
 	profileService := usecase.NewProfileService(userRepo)
 	favoritesService := usecase.NewFavoritesService(favoriteRepo, productRepo, eventRepo)
 	placesService := usecase.NewPlacesService(placeRepo)
@@ -65,6 +69,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		JWTManager:             jwtManager,
 		AuthService:            authService,
 		CatalogService:         catalogService,
+		CartService:            cartService,
+		OrdersService:          ordersService,
 		ProfileService:         profileService,
 		FavoritesService:       favoritesService,
 		PlacesService:          placesService,

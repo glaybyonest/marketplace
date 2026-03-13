@@ -20,6 +20,8 @@ type Dependencies struct {
 	JWTManager             *security.JWTManager
 	AuthService            *usecase.AuthService
 	CatalogService         *usecase.CatalogService
+	CartService            *usecase.CartService
+	OrdersService          *usecase.OrdersService
 	ProfileService         *usecase.ProfileService
 	FavoritesService       *usecase.FavoritesService
 	PlacesService          *usecase.PlacesService
@@ -37,6 +39,8 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
 	catalogHandler := handlers.NewCatalogHandler(deps.CatalogService)
+	cartHandler := handlers.NewCartHandler(deps.CartService)
+	ordersHandler := handlers.NewOrdersHandler(deps.OrdersService)
 	profileHandler := handlers.NewProfileHandler(deps.ProfileService)
 	favoritesHandler := handlers.NewFavoritesHandler(deps.FavoritesService)
 	placesHandler := handlers.NewPlacesHandler(deps.PlacesService)
@@ -77,10 +81,20 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Post("/favorites/{product_id}", favoritesHandler.Add)
 			r.Delete("/favorites/{product_id}", favoritesHandler.Delete)
 
+			r.Get("/cart", cartHandler.Get)
+			r.Post("/cart/items", cartHandler.AddItem)
+			r.Patch("/cart/items/{product_id}", cartHandler.UpdateItem)
+			r.Delete("/cart/items/{product_id}", cartHandler.DeleteItem)
+			r.Delete("/cart", cartHandler.Clear)
+
 			r.Post("/places", placesHandler.Create)
 			r.Get("/places", placesHandler.List)
 			r.Patch("/places/{id}", placesHandler.Patch)
 			r.Delete("/places/{id}", placesHandler.Delete)
+
+			r.Post("/orders", ordersHandler.Checkout)
+			r.Get("/orders", ordersHandler.List)
+			r.Get("/orders/{id}", ordersHandler.GetByID)
 
 			r.Get("/recommendations", recommendationsHandler.List)
 		})

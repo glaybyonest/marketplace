@@ -30,6 +30,18 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
     return 'Проверьте корректность введенных данных'
   }
 
+  if (backendCode === 'cart_empty') {
+    return 'Cart is empty'
+  }
+
+  if (backendCode === 'insufficient_stock') {
+    return 'Not enough stock for this product'
+  }
+
+  if (backendCode === 'product_unavailable') {
+    return 'Product is unavailable'
+  }
+
   if (backendMessage) {
     return backendMessage
   }
