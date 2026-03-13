@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"marketplace-backend/internal/domain"
+	"marketplace-backend/internal/observability"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,15 @@ import (
 
 type profileUserRepoMock struct {
 	users map[uuid.UUID]domain.User
+}
+
+type profileAuditMock struct {
+	entries []observability.AuditEntry
+}
+
+func (m *profileAuditMock) Record(ctx context.Context, entry observability.AuditEntry) error {
+	m.entries = append(m.entries, entry)
+	return nil
 }
 
 func (m *profileUserRepoMock) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
@@ -46,7 +56,8 @@ func TestProfileService(t *testing.T) {
 			userID: {ID: userID, Email: "profile@example.com", FullName: "User Name", IsActive: true},
 		},
 	}
-	service := NewProfileService(repo)
+	audit := &profileAuditMock{}
+	service := NewProfileService(repo, audit)
 
 	tests := []struct {
 		name    string
@@ -204,4 +215,7 @@ func TestProfileService(t *testing.T) {
 			}
 		})
 	}
+
+	require.NotEmpty(t, audit.entries)
+	assert.Equal(t, "profile.updated", audit.entries[len(audit.entries)-1].Action)
 }

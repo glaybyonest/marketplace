@@ -9,6 +9,7 @@ import (
 
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/mailer"
+	"marketplace-backend/internal/observability"
 	"marketplace-backend/internal/security"
 
 	"github.com/google/uuid"
@@ -23,6 +24,7 @@ type authState struct {
 	sessions     map[string]domain.UserSession
 	actionTokens map[string]domain.AuthActionToken
 	sentMessages []mailer.Message
+	auditEntries []observability.AuditEntry
 }
 
 type authUserRepoMock struct {
@@ -257,6 +259,19 @@ func (m *authMailerMock) Send(ctx context.Context, message mailer.Message) error
 	return nil
 }
 
+type authAuditMock struct {
+	state *authState
+	force error
+}
+
+func (m *authAuditMock) Record(ctx context.Context, entry observability.AuditEntry) error {
+	if m.force != nil {
+		return m.force
+	}
+	m.state.auditEntries = append(m.state.auditEntries, entry)
+	return nil
+}
+
 type jwtMock struct {
 	fail error
 }
@@ -302,11 +317,13 @@ func TestAuthService(t *testing.T) {
 		sessions:     map[string]domain.UserSession{},
 		actionTokens: map[string]domain.AuthActionToken{},
 		sentMessages: make([]mailer.Message, 0),
+		auditEntries: make([]observability.AuditEntry, 0),
 	}
 	users := &authUserRepoMock{state: state}
 	sessions := &authSessionRepoMock{state: state}
 	actionTokens := &authActionTokenRepoMock{state: state}
 	messageSender := &authMailerMock{state: state}
+	auditLogger := &authAuditMock{state: state}
 	jwt := &jwtMock{}
 	service := NewAuthService(
 		users,
@@ -315,6 +332,7 @@ func TestAuthService(t *testing.T) {
 		jwt,
 		security.NewPasswordManager(),
 		messageSender,
+		auditLogger,
 		"http://localhost:5173",
 		"no-reply@marketplace.local",
 		[]string{"admin@example.com"},
@@ -337,6 +355,8 @@ func TestAuthService(t *testing.T) {
 		assert.Equal(t, domain.UserRoleCustomer, result.User.Role)
 		require.Len(t, state.sentMessages, 1)
 		assert.Contains(t, state.sentMessages[0].Text, "http://localhost:5173/verify-email?token=")
+		require.NotEmpty(t, state.auditEntries)
+		assert.Equal(t, "auth.register", state.auditEntries[len(state.auditEntries)-1].Action)
 
 		_, err = service.Login(context.Background(), LoginInput{
 			Email:    "user@example.com",
@@ -370,10 +390,20 @@ func TestAuthService(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result.Tokens)
 		assert.Equal(t, "Bearer", result.Tokens.TokenType)
+		assert.Equal(t, "auth.login", state.auditEntries[len(state.auditEntries)-1].Action)
 
 		_, err = service.ConfirmEmailVerification(context.Background(), VerifyEmailConfirmInput{Token: verifyToken})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrInvalidToken)
+	})
+
+	t.Run("login failure is audited", func(t *testing.T) {
+		_, err := service.Login(context.Background(), LoginInput{
+			Email:    "user@example.com",
+			Password: "WrongPass9",
+		})
+		require.Error(t, err)
+		assert.Equal(t, "auth.login_failed", state.auditEntries[len(state.auditEntries)-1].Action)
 	})
 
 	t.Run("request verification resend is generic", func(t *testing.T) {

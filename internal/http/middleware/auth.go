@@ -6,6 +6,7 @@ import (
 
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/response"
+	"marketplace-backend/internal/observability"
 	"marketplace-backend/internal/security"
 )
 
@@ -48,6 +49,13 @@ func (a *Auth) Handler(next http.Handler) http.Handler {
 			role = domain.UserRoleCustomer
 		}
 
-		next.ServeHTTP(w, r.WithContext(WithAuth(r.Context(), userID, claims.Email, role)))
+		ctx := WithAuth(r.Context(), userID, claims.Email, role)
+		ctx = observability.WithActor(ctx, observability.Actor{
+			UserID: userID,
+			Email:  claims.Email,
+			Role:   string(role),
+		})
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

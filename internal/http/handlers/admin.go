@@ -42,7 +42,7 @@ func NewAdminHandler(service AdminService) *AdminHandler {
 func (h *AdminHandler) CategoriesList(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.ListCategories(r.Context())
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)
@@ -51,19 +51,19 @@ func (h *AdminHandler) CategoriesList(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) CategoryCreate(w http.ResponseWriter, r *http.Request) {
 	var req dto.AdminCategoryUpsertRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	input, err := toAdminCategoryInput(req)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	category, err := h.service.CreateCategory(r.Context(), input)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, category)
@@ -72,25 +72,25 @@ func (h *AdminHandler) CategoryCreate(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) CategoryUpdate(w http.ResponseWriter, r *http.Request) {
 	categoryID, err := parseUUIDParam("id", r)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	var req dto.AdminCategoryUpsertRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	input, err := toAdminCategoryInput(req)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	category, err := h.service.UpdateCategory(r.Context(), categoryID, input)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, category)
@@ -99,12 +99,12 @@ func (h *AdminHandler) CategoryUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) CategoryDelete(w http.ResponseWriter, r *http.Request) {
 	categoryID, err := parseUUIDParam("id", r)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	if err := h.service.DeleteCategory(r.Context(), categoryID); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]bool{"deleted": true})
@@ -122,31 +122,31 @@ func (h *AdminHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 	if rawCategoryID := strings.TrimSpace(query.Get("category_id")); rawCategoryID != "" {
 		categoryID, err := uuid.Parse(rawCategoryID)
 		if err != nil {
-			writeDomainError(w, domain.ErrInvalidInput)
+			writeDomainError(w, r, domain.ErrInvalidInput)
 			return
 		}
 		filter.CategoryID = &categoryID
 	}
 	if minPrice, ok, err := parseOptionalFloat(query.Get("min_price")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.MinPrice = &minPrice
 	}
 	if maxPrice, ok, err := parseOptionalFloat(query.Get("max_price")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.MaxPrice = &maxPrice
 	}
 	if inStock, ok, err := parseOptionalBool(query.Get("in_stock")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.InStock = &inStock
 	}
 	if isActive, ok, err := parseOptionalBool(query.Get("is_active")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.IsActive = &isActive
@@ -154,7 +154,7 @@ func (h *AdminHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.service.ListProducts(r.Context(), filter)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)
@@ -163,19 +163,19 @@ func (h *AdminHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) ProductCreate(w http.ResponseWriter, r *http.Request) {
 	var req dto.AdminProductUpsertRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	input, err := toAdminProductInput(req)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	product, err := h.service.CreateProduct(r.Context(), input)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, product)
@@ -184,25 +184,25 @@ func (h *AdminHandler) ProductCreate(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) ProductUpdate(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam("id", r)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	var req dto.AdminProductUpsertRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	input, err := toAdminProductInput(req)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	product, err := h.service.UpdateProduct(r.Context(), productID, input)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
@@ -211,19 +211,19 @@ func (h *AdminHandler) ProductUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) ProductUpdateStock(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam("id", r)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	var req dto.AdminProductStockRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	product, err := h.service.UpdateProductStock(r.Context(), productID, req.StockQty)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
@@ -232,13 +232,13 @@ func (h *AdminHandler) ProductUpdateStock(w http.ResponseWriter, r *http.Request
 func (h *AdminHandler) ProductDelete(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam("id", r)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	product, err := h.service.DeleteProduct(r.Context(), productID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]any{

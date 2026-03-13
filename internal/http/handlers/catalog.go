@@ -36,7 +36,7 @@ func NewCatalogHandler(service CatalogService) *CatalogHandler {
 func (h *CatalogHandler) CategoriesTree(w http.ResponseWriter, r *http.Request) {
 	tree, err := h.service.ListCategoriesTree(r.Context())
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, tree)
@@ -45,13 +45,13 @@ func (h *CatalogHandler) CategoriesTree(w http.ResponseWriter, r *http.Request) 
 func (h *CatalogHandler) CategoryByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	item, err := h.service.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, item)
@@ -60,7 +60,7 @@ func (h *CatalogHandler) CategoryByID(w http.ResponseWriter, r *http.Request) {
 func (h *CatalogHandler) CategoryBySlug(w http.ResponseWriter, r *http.Request) {
 	item, err := h.service.GetCategoryBySlug(r.Context(), chi.URLParam(r, "slug"))
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, item)
@@ -79,25 +79,25 @@ func (h *CatalogHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 	if rawCategoryID := strings.TrimSpace(query.Get("category_id")); rawCategoryID != "" {
 		categoryID, err := uuid.Parse(rawCategoryID)
 		if err != nil {
-			writeDomainError(w, domain.ErrInvalidInput)
+			writeDomainError(w, r, domain.ErrInvalidInput)
 			return
 		}
 		filter.CategoryID = &categoryID
 	}
 	if minPrice, ok, err := parseOptionalFloat(query.Get("min_price")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.MinPrice = &minPrice
 	}
 	if maxPrice, ok, err := parseOptionalFloat(query.Get("max_price")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.MaxPrice = &maxPrice
 	}
 	if inStock, ok, err := parseOptionalBool(query.Get("in_stock")); err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	} else if ok {
 		filter.InStock = &inStock
@@ -105,7 +105,7 @@ func (h *CatalogHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.ListProducts(r.Context(), filter)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, result)
@@ -114,13 +114,13 @@ func (h *CatalogHandler) ProductsList(w http.ResponseWriter, r *http.Request) {
 func (h *CatalogHandler) ProductByID(w http.ResponseWriter, r *http.Request) {
 	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	product, err := h.service.GetProductByID(r.Context(), productID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
@@ -129,7 +129,7 @@ func (h *CatalogHandler) ProductByID(w http.ResponseWriter, r *http.Request) {
 func (h *CatalogHandler) ProductBySlug(w http.ResponseWriter, r *http.Request) {
 	product, err := h.service.GetProductBySlug(r.Context(), chi.URLParam(r, "slug"))
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
@@ -141,7 +141,7 @@ func (h *CatalogHandler) SearchSuggestions(w http.ResponseWriter, r *http.Reques
 
 	items, err := h.service.SearchSuggestions(r.Context(), query, limit)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)
@@ -152,7 +152,7 @@ func (h *CatalogHandler) PopularSearches(w http.ResponseWriter, r *http.Request)
 
 	items, err := h.service.PopularSearches(r.Context(), limit)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)

@@ -27,19 +27,19 @@ func NewRecommendationsHandler(service RecommendationsService) *RecommendationsH
 func (h *RecommendationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	limit := parseIntWithDefault(strings.TrimSpace(r.URL.Query().Get("limit")), 20)
 	if limit <= 0 {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	items, err := h.service.Get(r.Context(), userID, limit)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)

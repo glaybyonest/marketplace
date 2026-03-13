@@ -36,25 +36,25 @@ func NewOrdersHandler(service OrdersService) *OrdersHandler {
 func (h *OrdersHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	var req dto.CheckoutRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	placeID, err := uuid.Parse(strings.TrimSpace(req.PlaceID))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	order, err := h.service.Checkout(r.Context(), userID, placeID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, order)
@@ -63,7 +63,7 @@ func (h *OrdersHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 func (h *OrdersHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *OrdersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.List(r.Context(), userID, page, limit)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, result)
@@ -81,19 +81,19 @@ func (h *OrdersHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *OrdersHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	orderID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	order, err := h.service.GetByID(r.Context(), userID, orderID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, order)

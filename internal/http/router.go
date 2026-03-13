@@ -7,6 +7,7 @@ import (
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/handlers"
 	httpmw "marketplace-backend/internal/http/middleware"
+	"marketplace-backend/internal/observability"
 	"marketplace-backend/internal/security"
 	"marketplace-backend/internal/usecase"
 
@@ -18,6 +19,8 @@ import (
 type Dependencies struct {
 	Logger                 *slog.Logger
 	DB                     *pgxpool.Pool
+	Metrics                *observability.Metrics
+	ErrorReporter          *observability.ErrorReporter
 	JWTManager             *security.JWTManager
 	AuthService            *usecase.AuthService
 	AdminService           *usecase.AdminService
@@ -34,8 +37,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RealIP)
 	router.Use(httpmw.RequestID)
+	router.Use(httpmw.ErrorReporter(deps.ErrorReporter))
+	router.Use(httpmw.Metrics(deps.Metrics))
 	router.Use(httpmw.Logger(deps.Logger))
-	router.Use(httpmw.Recoverer(deps.Logger))
+	router.Use(httpmw.Recoverer(deps.Logger, deps.ErrorReporter))
 
 	authMiddleware := httpmw.NewAuth(deps.JWTManager)
 
@@ -52,6 +57,9 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	router.Get("/healthz", healthHandler.Healthz)
 	router.Get("/readyz", healthHandler.Readyz)
+	if deps.Metrics != nil {
+		router.Handle("/metrics", deps.Metrics.Handler())
+	}
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {

@@ -141,6 +141,7 @@ go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "p
 - `00006_auth_email_flows.sql` - подтверждение email и reset tokens
 - `00007_product_media_attributes.sql` - изображения товаров, галерея и характеристики
 - `00008_search_upgrade.sql` - popular queries, search suggestions и расширенные фильтры каталога
+- `00010_observability.sql` - audit logs, error events и observability storage
 
 ## Локальный запуск backend без API-контейнера
 1. Поднимите только PostgreSQL:
@@ -167,12 +168,32 @@ npm run test
 npm run build
 ```
 
+## Observability
+- `GET /metrics` - Prometheus metrics endpoint
+- JSON structured logs через `slog`
+- request-level метрики:
+  - `marketplace_http_requests_total`
+  - `marketplace_http_request_duration_seconds`
+  - `marketplace_http_requests_in_flight`
+- database pool metrics:
+  - `marketplace_db_pool_total_connections`
+  - `marketplace_db_pool_idle_connections`
+  - `marketplace_db_pool_acquired_connections`
+  - и связанные счетчики acquire/wait/new connections
+- error tracking:
+  - таблица `error_events`
+  - panic и internal error capture с `request_id`, route, status и details
+- audit log:
+  - таблица `audit_logs`
+  - auth/profile события пишутся в аудит (`register/login/logout/refresh/email verify/password reset/profile update`)
+
 ## API
 Базовый адрес: `http://localhost:8080`
 
 Публичные endpoints:
 - `GET /healthz`
 - `GET /readyz`
+- `GET /metrics`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`

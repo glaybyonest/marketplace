@@ -41,7 +41,7 @@ func NewAuthHandler(service AuthService) *AuthHandler {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		IP:        getClientIP(r),
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		IP:        getClientIP(r),
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		IP:           getClientIP(r),
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -104,13 +104,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	var req dto.LogoutRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		UserID:       userID,
 		RefreshToken: req.RefreshToken,
 	}); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -128,13 +128,13 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	user, err := h.service.Me(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -144,14 +144,14 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) RequestEmailVerification(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	if err := h.service.RequestEmailVerification(r.Context(), usecase.VerifyEmailRequestInput{
 		Email: req.Email,
 	}); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *AuthHandler) RequestEmailVerification(w http.ResponseWriter, r *http.Re
 func (h *AuthHandler) ConfirmEmailVerification(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailConfirmRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -169,7 +169,7 @@ func (h *AuthHandler) ConfirmEmailVerification(w http.ResponseWriter, r *http.Re
 		Token: req.Token,
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -182,14 +182,14 @@ func (h *AuthHandler) ConfirmEmailVerification(w http.ResponseWriter, r *http.Re
 func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	if err := h.service.RequestPasswordReset(r.Context(), usecase.PasswordResetRequestInput{
 		Email: req.Email,
 	}); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 func (h *AuthHandler) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetConfirmRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (h *AuthHandler) ConfirmPasswordReset(w http.ResponseWriter, r *http.Reques
 		Token:       req.Token,
 		NewPassword: req.NewPassword,
 	}); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 

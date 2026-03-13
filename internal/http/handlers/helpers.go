@@ -9,7 +9,9 @@ import (
 
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/response"
+	"marketplace-backend/internal/observability"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -28,11 +30,25 @@ func decodeAndValidate(r *http.Request, dst any, validate *validator.Validate) e
 	return nil
 }
 
-func writeDomainError(w http.ResponseWriter, err error) {
+func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 	if err == nil {
 		return
 	}
-	response.FromDomainError(w, err)
+	descriptor := response.DescribeDomainError(err)
+	if descriptor.Status >= http.StatusInternalServerError {
+		if reporter, ok := observability.ErrorReporterFromContext(r.Context()); ok && reporter != nil {
+			reporter.Capture(r.Context(), observability.ErrorEvent{
+				Severity: "error",
+				Code:     descriptor.Code,
+				Message:  err.Error(),
+				Method:   r.Method,
+				Path:     r.URL.Path,
+				Route:    handlerRoutePattern(r),
+				Status:   descriptor.Status,
+			})
+		}
+	}
+	response.Error(w, descriptor.Status, descriptor.Code, descriptor.Message, descriptor.Details)
 }
 
 func getClientIP(r *http.Request) string {
@@ -52,4 +68,16 @@ func getClientIP(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimSpace(r.RemoteAddr)
+}
+
+func handlerRoutePattern(r *http.Request) string {
+	if routeCtx := chi.RouteContext(r.Context()); routeCtx != nil {
+		if pattern := routeCtx.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	if r.URL.Path == "" {
+		return "/"
+	}
+	return r.URL.Path
 }

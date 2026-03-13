@@ -38,13 +38,13 @@ func NewPlacesHandler(service PlacesService) *PlacesHandler {
 func (h *PlacesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	var req dto.CreatePlaceRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (h *PlacesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Lon:         req.Lon,
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, item)
@@ -64,13 +64,13 @@ func (h *PlacesHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *PlacesHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	items, err := h.service.List(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, items)
@@ -79,19 +79,19 @@ func (h *PlacesHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *PlacesHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	placeID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	var req dto.UpdatePlaceRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *PlacesHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		Lon:         req.Lon,
 	})
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -112,18 +112,18 @@ func (h *PlacesHandler) Patch(w http.ResponseWriter, r *http.Request) {
 func (h *PlacesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	placeID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.Delete(r.Context(), userID, placeID); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 

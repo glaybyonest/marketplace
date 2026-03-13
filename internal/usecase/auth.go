@@ -10,6 +10,7 @@ import (
 
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/mailer"
+	"marketplace-backend/internal/observability"
 	"marketplace-backend/internal/security"
 
 	"github.com/google/uuid"
@@ -49,6 +50,10 @@ type PasswordProvider interface {
 
 type Mailer interface {
 	Send(ctx context.Context, message mailer.Message) error
+}
+
+type AuthAuditLogger interface {
+	Record(ctx context.Context, entry observability.AuditEntry) error
 }
 
 type CreateUserInput struct {
@@ -117,6 +122,7 @@ type AuthService struct {
 	jwt              JWTProvider
 	passwords        PasswordProvider
 	mailer           Mailer
+	audit            AuthAuditLogger
 	refreshTTL       time.Duration
 	emailVerifyTTL   time.Duration
 	passwordResetTTL time.Duration
@@ -133,6 +139,7 @@ func NewAuthService(
 	jwt JWTProvider,
 	passwords PasswordProvider,
 	mailer Mailer,
+	audit AuthAuditLogger,
 	appBaseURL string,
 	mailFrom string,
 	adminEmails []string,
@@ -156,6 +163,7 @@ func NewAuthService(
 		jwt:              jwt,
 		passwords:        passwords,
 		mailer:           mailer,
+		audit:            audit,
 		refreshTTL:       refreshTTL,
 		emailVerifyTTL:   emailVerifyTTL,
 		passwordResetTTL: passwordResetTTL,
@@ -197,6 +205,16 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (domain
 	if err := s.issueEmailVerification(ctx, user); err != nil {
 		return domain.AuthResult{}, err
 	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.register",
+		EntityType:  "user",
+		EntityID:    ptrUUID(user.ID),
+		Metadata: map[string]any{
+			"email": user.Email,
+			"role":  string(user.Role),
+		},
+	})
 
 	return domain.AuthResult{
 		User:                      user,
@@ -214,17 +232,55 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (domain.AuthR
 	user, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.recordAudit(ctx, observability.AuditEntry{
+				Action:     "auth.login_failed",
+				EntityType: "user",
+				Metadata: map[string]any{
+					"email":  email,
+					"reason": "not_found",
+				},
+			})
 			return domain.AuthResult{}, domain.ErrUnauthorized
 		}
 		return domain.AuthResult{}, err
 	}
 	if !user.IsActive {
+		s.recordAudit(ctx, observability.AuditEntry{
+			ActorUserID: ptrUUID(user.ID),
+			Action:      "auth.login_failed",
+			EntityType:  "user",
+			EntityID:    ptrUUID(user.ID),
+			Metadata: map[string]any{
+				"email":  user.Email,
+				"reason": "inactive_user",
+			},
+		})
 		return domain.AuthResult{}, domain.ErrInactiveUser
 	}
 	if !user.IsEmailVerified {
+		s.recordAudit(ctx, observability.AuditEntry{
+			ActorUserID: ptrUUID(user.ID),
+			Action:      "auth.login_failed",
+			EntityType:  "user",
+			EntityID:    ptrUUID(user.ID),
+			Metadata: map[string]any{
+				"email":  user.Email,
+				"reason": "email_not_verified",
+			},
+		})
 		return domain.AuthResult{}, domain.ErrEmailNotVerified
 	}
 	if !s.passwords.Compare(user.PasswordHash, input.Password) {
+		s.recordAudit(ctx, observability.AuditEntry{
+			ActorUserID: ptrUUID(user.ID),
+			Action:      "auth.login_failed",
+			EntityType:  "user",
+			EntityID:    ptrUUID(user.ID),
+			Metadata: map[string]any{
+				"email":  user.Email,
+				"reason": "invalid_password",
+			},
+		})
 		return domain.AuthResult{}, domain.ErrUnauthorized
 	}
 
@@ -232,6 +288,15 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (domain.AuthR
 	if err != nil {
 		return domain.AuthResult{}, err
 	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.login",
+		EntityType:  "user",
+		EntityID:    ptrUUID(user.ID),
+		Metadata: map[string]any{
+			"email": user.Email,
+		},
+	})
 
 	return domain.AuthResult{
 		User:   user,
@@ -299,6 +364,14 @@ func (s *AuthService) Refresh(ctx context.Context, input RefreshInput) (domain.T
 	if err != nil {
 		return domain.TokenPair{}, fmt.Errorf("generate access token: %w", err)
 	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.refresh",
+		EntityType:  "session",
+		Metadata: map[string]any{
+			"session_id": session.ID.String(),
+		},
+	})
 
 	return domain.TokenPair{
 		AccessToken:  accessToken,
@@ -325,6 +398,14 @@ func (s *AuthService) Logout(ctx context.Context, input LogoutInput) error {
 	if !revoked {
 		return domain.ErrUnauthorized
 	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(input.UserID),
+		Action:      "auth.logout",
+		EntityType:  "session",
+		Metadata: map[string]any{
+			"refresh_token_revoked": true,
+		},
+	})
 	return nil
 }
 
@@ -359,7 +440,17 @@ func (s *AuthService) RequestEmailVerification(ctx context.Context, input Verify
 		return nil
 	}
 
-	return s.issueEmailVerification(ctx, user)
+	if err := s.issueEmailVerification(ctx, user); err != nil {
+		return err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.verify_email_requested",
+		EntityType:  "user",
+		EntityID:    ptrUUID(user.ID),
+		Metadata:    map[string]any{"email": user.Email},
+	})
+	return nil
 }
 
 func (s *AuthService) ConfirmEmailVerification(ctx context.Context, input VerifyEmailConfirmInput) (domain.User, error) {
@@ -392,7 +483,18 @@ func (s *AuthService) ConfirmEmailVerification(ctx context.Context, input Verify
 		return user, nil
 	}
 
-	return s.users.MarkEmailVerified(ctx, user.ID, s.now())
+	verifiedUser, err := s.users.MarkEmailVerified(ctx, user.ID, s.now())
+	if err != nil {
+		return domain.User{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.email_verified",
+		EntityType:  "user",
+		EntityID:    ptrUUID(user.ID),
+		Metadata:    map[string]any{"email": user.Email},
+	})
+	return verifiedUser, nil
 }
 
 func (s *AuthService) RequestPasswordReset(ctx context.Context, input PasswordResetRequestInput) error {
@@ -412,7 +514,17 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, input PasswordRe
 		return nil
 	}
 
-	return s.issuePasswordReset(ctx, user)
+	if err := s.issuePasswordReset(ctx, user); err != nil {
+		return err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(user.ID),
+		Action:      "auth.password_reset_requested",
+		EntityType:  "user",
+		EntityID:    ptrUUID(user.ID),
+		Metadata:    map[string]any{"email": user.Email},
+	})
+	return nil
 }
 
 func (s *AuthService) ConfirmPasswordReset(ctx context.Context, input PasswordResetConfirmInput) error {
@@ -451,6 +563,12 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, input PasswordRe
 	if !consumed {
 		return domain.ErrInvalidToken
 	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		ActorUserID: ptrUUID(actionToken.UserID),
+		Action:      "auth.password_reset_completed",
+		EntityType:  "user",
+		EntityID:    ptrUUID(actionToken.UserID),
+	})
 	return nil
 }
 
@@ -491,6 +609,20 @@ func (s *AuthService) resolveRole(email string) domain.UserRole {
 		return domain.UserRoleAdmin
 	}
 	return domain.UserRoleCustomer
+}
+
+func (s *AuthService) recordAudit(ctx context.Context, entry observability.AuditEntry) {
+	if s.audit == nil {
+		return
+	}
+	_ = s.audit.Record(ctx, entry)
+}
+
+func ptrUUID(value uuid.UUID) *uuid.UUID {
+	if value == uuid.Nil {
+		return nil
+	}
+	return &value
 }
 
 func (s *AuthService) issueEmailVerification(ctx context.Context, user domain.User) error {

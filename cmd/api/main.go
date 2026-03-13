@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	logger := observability.NewLogger(cfg.LogLevel)
+	logger := observability.NewLogger(cfg.LogLevel).With("service", "marketplace-api", "env", cfg.Env)
 	application, err := app.New(cfg, logger)
 	if err != nil {
 		logger.Error("build app", "error", err)

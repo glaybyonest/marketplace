@@ -30,19 +30,19 @@ func NewFavoritesHandler(service FavoritesService) *FavoritesHandler {
 func (h *FavoritesHandler) Add(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "product_id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	created, err := h.service.Add(r.Context(), userID, productID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -52,18 +52,18 @@ func (h *FavoritesHandler) Add(w http.ResponseWriter, r *http.Request) {
 func (h *FavoritesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "product_id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.Remove(r.Context(), userID, productID); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
@@ -73,20 +73,20 @@ func (h *FavoritesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *FavoritesHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	page := parseIntWithDefault(strings.TrimSpace(r.URL.Query().Get("page")), 1)
 	limit := parseIntWithDefault(strings.TrimSpace(r.URL.Query().Get("limit")), 20)
 	if page <= 0 || limit <= 0 {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	result, err := h.service.List(r.Context(), userID, page, limit)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 

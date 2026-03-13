@@ -22,6 +22,13 @@ type errorBody struct {
 	Details any    `json:"details,omitempty"`
 }
 
+type DomainErrorDescriptor struct {
+	Status  int
+	Code    string
+	Message string
+	Details any
+}
+
 func JSON(w http.ResponseWriter, status int, data any) {
 	writeJSON(w, status, successEnvelope{Data: data})
 }
@@ -36,37 +43,42 @@ func Error(w http.ResponseWriter, status int, code, message string, details any)
 	})
 }
 
-func FromDomainError(w http.ResponseWriter, err error) {
+func DescribeDomainError(err error) DomainErrorDescriptor {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
-		Error(w, http.StatusBadRequest, "invalid_input", "invalid input", nil)
+		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "invalid_input", Message: "invalid input"}
 	case errors.Is(err, domain.ErrCartEmpty):
-		Error(w, http.StatusBadRequest, "cart_empty", "cart is empty", nil)
+		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "cart_empty", Message: "cart is empty"}
 	case errors.Is(err, domain.ErrUnauthorized):
-		Error(w, http.StatusUnauthorized, "unauthorized", "unauthorized", nil)
+		return DomainErrorDescriptor{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "unauthorized"}
 	case errors.Is(err, domain.ErrInvalidToken):
-		Error(w, http.StatusBadRequest, "invalid_token", "invalid or expired token", nil)
+		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "invalid_token", Message: "invalid or expired token"}
 	case errors.Is(err, domain.ErrInactiveUser):
-		Error(w, http.StatusForbidden, "inactive_user", "user is inactive", nil)
+		return DomainErrorDescriptor{Status: http.StatusForbidden, Code: "inactive_user", Message: "user is inactive"}
 	case errors.Is(err, domain.ErrEmailNotVerified):
-		Error(w, http.StatusForbidden, "email_not_verified", "email is not verified", nil)
+		return DomainErrorDescriptor{Status: http.StatusForbidden, Code: "email_not_verified", Message: "email is not verified"}
 	case errors.Is(err, domain.ErrForbidden):
-		Error(w, http.StatusForbidden, "forbidden", "forbidden", nil)
+		return DomainErrorDescriptor{Status: http.StatusForbidden, Code: "forbidden", Message: "forbidden"}
 	case errors.Is(err, domain.ErrStockShortage):
-		Error(w, http.StatusConflict, "insufficient_stock", "insufficient stock", nil)
+		return DomainErrorDescriptor{Status: http.StatusConflict, Code: "insufficient_stock", Message: "insufficient stock"}
 	case errors.Is(err, domain.ErrUnavailable):
-		Error(w, http.StatusConflict, "product_unavailable", "product unavailable", nil)
+		return DomainErrorDescriptor{Status: http.StatusConflict, Code: "product_unavailable", Message: "product unavailable"}
 	case errors.Is(err, domain.ErrNotFound):
-		Error(w, http.StatusNotFound, "not_found", "resource not found", nil)
+		return DomainErrorDescriptor{Status: http.StatusNotFound, Code: "not_found", Message: "resource not found"}
 	case errors.Is(err, domain.ErrConflict):
-		Error(w, http.StatusConflict, "conflict", "resource conflict", nil)
+		return DomainErrorDescriptor{Status: http.StatusConflict, Code: "conflict", Message: "resource conflict"}
 	case errors.Is(err, domain.ErrTokenReused):
-		Error(w, http.StatusUnauthorized, "refresh_token_reused", "refresh token already used", nil)
+		return DomainErrorDescriptor{Status: http.StatusUnauthorized, Code: "refresh_token_reused", Message: "refresh token already used"}
 	case errors.Is(err, domain.ErrSessionClosed):
-		Error(w, http.StatusUnauthorized, "session_closed", "session is closed", nil)
+		return DomainErrorDescriptor{Status: http.StatusUnauthorized, Code: "session_closed", Message: "session is closed"}
 	default:
-		Error(w, http.StatusInternalServerError, "internal_error", "internal server error", nil)
+		return DomainErrorDescriptor{Status: http.StatusInternalServerError, Code: "internal_error", Message: "internal server error"}
 	}
+}
+
+func FromDomainError(w http.ResponseWriter, err error) {
+	descriptor := DescribeDomainError(err)
+	Error(w, descriptor.Status, descriptor.Code, descriptor.Message, descriptor.Details)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

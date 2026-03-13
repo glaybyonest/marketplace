@@ -33,13 +33,13 @@ func NewProfileHandler(service ProfileService) *ProfileHandler {
 func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	user, err := h.service.Get(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, user)
@@ -48,19 +48,19 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	var req dto.UpdateProfileRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	user, err := h.service.Update(r.Context(), userID, req.FullName)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, user)

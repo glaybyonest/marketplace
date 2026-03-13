@@ -38,13 +38,13 @@ func NewCartHandler(service CartService) *CartHandler {
 func (h *CartHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	cart, err := h.service.Get(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, cart)
@@ -53,30 +53,30 @@ func (h *CartHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *CartHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	var req dto.CartItemRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	productID, err := uuid.Parse(strings.TrimSpace(req.ProductID))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.AddItem(r.Context(), userID, productID, req.Quantity); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	cart, err := h.service.Get(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, cart)
@@ -85,30 +85,30 @@ func (h *CartHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 func (h *CartHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "product_id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	var req dto.UpdateCartItemRequest
 	if err := decodeAndValidate(r, &req, h.validate); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	if err := h.service.UpdateItem(r.Context(), userID, productID, req.Quantity); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	cart, err := h.service.Get(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, cart)
@@ -117,24 +117,24 @@ func (h *CartHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 func (h *CartHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "product_id")))
 	if err != nil {
-		writeDomainError(w, domain.ErrInvalidInput)
+		writeDomainError(w, r, domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.DeleteItem(r.Context(), userID, productID); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 
 	cart, err := h.service.Get(r.Context(), userID)
 	if err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, cart)
@@ -143,12 +143,12 @@ func (h *CartHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 func (h *CartHandler) Clear(w http.ResponseWriter, r *http.Request) {
 	userID, ok := httpmw.UserID(r.Context())
 	if !ok {
-		writeDomainError(w, domain.ErrUnauthorized)
+		writeDomainError(w, r, domain.ErrUnauthorized)
 		return
 	}
 
 	if err := h.service.Clear(r.Context(), userID); err != nil {
-		writeDomainError(w, err)
+		writeDomainError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, domain.Cart{

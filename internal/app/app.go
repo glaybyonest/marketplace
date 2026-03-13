@@ -10,6 +10,7 @@ import (
 
 	httpapi "marketplace-backend/internal/http"
 	"marketplace-backend/internal/mailer"
+	"marketplace-backend/internal/observability"
 	"marketplace-backend/internal/repository/postgres"
 	"marketplace-backend/internal/security"
 	"marketplace-backend/internal/usecase"
@@ -44,6 +45,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
 	actionTokenRepo := postgres.NewAuthActionTokenRepository(db)
+	auditLogRepo := postgres.NewAuditLogRepository(db)
+	errorEventRepo := postgres.NewErrorEventRepository(db)
 	categoryRepo := postgres.NewCategoryRepository(db)
 	productRepo := postgres.NewProductRepository(db)
 	cartRepo := postgres.NewCartRepository(db)
@@ -56,6 +59,9 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	jwtManager := security.NewJWTManager(cfg.JWTSecret, cfg.AccessTokenTTL)
 	passwordManager := security.NewPasswordManager()
 	logMailer := mailer.NewLogSender(logger)
+	metrics := observability.NewMetrics(db)
+	auditLogger := observability.NewAuditLogger(logger, metrics, auditLogRepo)
+	errorReporter := observability.NewErrorReporter(logger, metrics, errorEventRepo)
 
 	if err := userRepo.PromoteAdminsByEmail(ctx, cfg.AdminEmails); err != nil {
 		db.Close()
@@ -69,6 +75,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		jwtManager,
 		passwordManager,
 		logMailer,
+		auditLogger,
 		cfg.AppBaseURL,
 		cfg.MailFrom,
 		cfg.AdminEmails,
@@ -80,7 +87,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
 	cartService := usecase.NewCartService(cartRepo, productRepo)
 	ordersService := usecase.NewOrdersService(orderRepo, placeRepo)
-	profileService := usecase.NewProfileService(userRepo)
+	profileService := usecase.NewProfileService(userRepo, auditLogger)
 	favoritesService := usecase.NewFavoritesService(favoriteRepo, productRepo, eventRepo)
 	placesService := usecase.NewPlacesService(placeRepo)
 	recommendationsService := usecase.NewRecommendationsService(recommendationRepo)
@@ -88,6 +95,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		Logger:                 logger,
 		DB:                     db,
+		Metrics:                metrics,
+		ErrorReporter:          errorReporter,
 		JWTManager:             jwtManager,
 		AuthService:            authService,
 		AdminService:           adminService,
