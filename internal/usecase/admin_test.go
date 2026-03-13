@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"marketplace-backend/internal/domain"
+	"marketplace-backend/internal/observability"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -176,9 +177,19 @@ func (m *adminProductRepoMock) UpdateStock(ctx context.Context, id uuid.UUID, st
 	return product, nil
 }
 
+type adminAuditMock struct {
+	entries []observability.AuditEntry
+}
+
+func (m *adminAuditMock) Record(ctx context.Context, entry observability.AuditEntry) error {
+	m.entries = append(m.entries, entry)
+	return nil
+}
+
 func TestAdminService(t *testing.T) {
 	rootID := uuid.New()
 	childID := uuid.New()
+	adminID := uuid.New()
 	now := time.Now().UTC()
 
 	categories := &adminCategoryRepoMock{
@@ -207,18 +218,30 @@ func TestAdminService(t *testing.T) {
 		},
 	}
 
-	service := NewAdminService(categories, products)
+	audit := &adminAuditMock{}
+	service := NewAdminService(categories, products, audit)
+	ctx := observability.WithActor(context.Background(), observability.Actor{
+		UserID: adminID,
+		Email:  "admin@example.com",
+		Role:   string(domain.UserRoleAdmin),
+	})
 
 	t.Run("create category normalizes slug", func(t *testing.T) {
-		category, err := service.CreateCategory(context.Background(), AdminCategoryInput{
+		category, err := service.CreateCategory(ctx, AdminCategoryInput{
 			Name: "Fresh Category",
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "fresh-category", category.Slug)
+		require.NotEmpty(t, audit.entries)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.category_created", entry.Action)
+		assert.Equal(t, "category", entry.EntityType)
+		require.NotNil(t, entry.EntityID)
+		assert.Equal(t, category.ID, *entry.EntityID)
 	})
 
 	t.Run("update category rejects cycle", func(t *testing.T) {
-		_, err := service.UpdateCategory(context.Background(), rootID, AdminCategoryInput{
+		_, err := service.UpdateCategory(ctx, rootID, AdminCategoryInput{
 			ParentID: &childID,
 			Name:     "Root",
 			Slug:     "root",
@@ -229,22 +252,67 @@ func TestAdminService(t *testing.T) {
 
 	t.Run("delete category rejects dependencies", func(t *testing.T) {
 		categories.hasProducts[rootID] = true
-		err := service.DeleteCategory(context.Background(), rootID)
+		err := service.DeleteCategory(ctx, rootID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrConflict)
 		categories.hasProducts[rootID] = false
 	})
 
-	t.Run("list products includes inactive", func(t *testing.T) {
-		_, err := service.ListProducts(context.Background(), domain.ProductFilter{Page: 1, Limit: 10, IsActive: ptrBool(true)})
+	t.Run("delete category is audited", func(t *testing.T) {
+		category, err := service.CreateCategory(ctx, AdminCategoryInput{
+			Name: "Disposable Category",
+		})
 		require.NoError(t, err)
+
+		err = service.DeleteCategory(ctx, category.ID)
+		require.NoError(t, err)
+
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.category_deleted", entry.Action)
+		assert.Equal(t, "category", entry.EntityType)
+		require.NotNil(t, entry.EntityID)
+		assert.Equal(t, category.ID, *entry.EntityID)
+	})
+
+	t.Run("list categories is audited", func(t *testing.T) {
+		items, err := service.ListCategories(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, items)
+
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.categories_listed", entry.Action)
+		assert.Equal(t, "category", entry.EntityType)
+		assert.Equal(t, len(items), entry.Metadata["count"])
+	})
+
+	t.Run("list products includes inactive", func(t *testing.T) {
+		filter := domain.ProductFilter{
+			Page:       1,
+			Limit:      10,
+			IsActive:   ptrBool(true),
+			Query:      "cement",
+			MinPrice:   ptrFloat(100),
+			MaxPrice:   ptrFloat(500),
+			InStock:    ptrBool(true),
+			CategoryID: &rootID,
+		}
+		result, err := service.ListProducts(ctx, filter)
+		require.NoError(t, err)
+		assert.Len(t, result.Items, 1)
 		assert.True(t, products.lastFilter.IncludeInactive)
 		require.NotNil(t, products.lastFilter.IsActive)
 		assert.True(t, *products.lastFilter.IsActive)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.products_listed", entry.Action)
+		assert.Equal(t, "product", entry.EntityType)
+		assert.Equal(t, "cement", entry.Metadata["query"])
+		assert.Equal(t, rootID.String(), entry.Metadata["category_id"])
+		assert.Equal(t, 1, entry.Metadata["items_count"])
+		assert.Equal(t, 1, entry.Metadata["total_items"])
 	})
 
 	t.Run("create product normalizes fields", func(t *testing.T) {
-		product, err := service.CreateProduct(context.Background(), AdminProductInput{
+		product, err := service.CreateProduct(ctx, AdminProductInput{
 			CategoryID: rootID,
 			Name:       " New Product ",
 			Price:      1250.5,
@@ -260,10 +328,12 @@ func TestAdminService(t *testing.T) {
 		assert.True(t, products.lastCreateInput.IsActive)
 		require.Len(t, products.lastCreateInput.Gallery, 1)
 		assert.Equal(t, 7, product.StockQty)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.product_created", entry.Action)
 	})
 
 	t.Run("update product preserves active when omitted", func(t *testing.T) {
-		product, err := service.UpdateProduct(context.Background(), productID, AdminProductInput{
+		product, err := service.UpdateProduct(ctx, productID, AdminProductInput{
 			CategoryID:  rootID,
 			Name:        "Updated Product",
 			Slug:        "updated-product",
@@ -276,19 +346,33 @@ func TestAdminService(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, products.lastUpdateInput.IsActive)
 		assert.Equal(t, "updated-product", product.Slug)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.product_updated", entry.Action)
 	})
 
 	t.Run("update stock validates negative values", func(t *testing.T) {
-		_, err := service.UpdateProductStock(context.Background(), productID, -1)
+		_, err := service.UpdateProductStock(ctx, productID, -1)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrInvalidInput)
 	})
 
+	t.Run("update stock is audited", func(t *testing.T) {
+		product, err := service.UpdateProductStock(ctx, productID, 11)
+		require.NoError(t, err)
+		assert.Equal(t, 11, product.StockQty)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.product_stock_updated", entry.Action)
+		assert.Equal(t, 11, entry.Metadata["after_stock_qty"])
+	})
+
 	t.Run("delete product is soft deactivate", func(t *testing.T) {
-		product, err := service.DeleteProduct(context.Background(), productID)
+		product, err := service.DeleteProduct(ctx, productID)
 		require.NoError(t, err)
 		assert.Equal(t, productID, products.lastActiveID)
 		assert.False(t, products.lastActiveValue)
 		assert.False(t, product.IsActive)
+		entry := audit.entries[len(audit.entries)-1]
+		assert.Equal(t, "admin.product_deleted", entry.Action)
+		assert.Equal(t, true, entry.Metadata["soft_delete"])
 	})
 }

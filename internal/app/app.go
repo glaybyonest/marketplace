@@ -83,7 +83,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		cfg.EmailVerifyTTL,
 		cfg.PasswordResetTTL,
 	)
-	adminService := usecase.NewAdminService(categoryRepo, productRepo)
+	adminService := usecase.NewAdminService(categoryRepo, productRepo, auditLogger)
 	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
 	cartService := usecase.NewCartService(cartRepo, productRepo)
 	ordersService := usecase.NewOrdersService(orderRepo, placeRepo)

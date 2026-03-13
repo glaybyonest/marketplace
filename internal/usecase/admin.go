@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"marketplace-backend/internal/domain"
+	"marketplace-backend/internal/observability"
 )
 
 type AdminCategoryRepository interface {
@@ -26,6 +27,10 @@ type AdminProductRepository interface {
 	Update(ctx context.Context, input ProductWriteInput) (domain.Product, error)
 	SetActive(ctx context.Context, id uuid.UUID, isActive bool) (domain.Product, error)
 	UpdateStock(ctx context.Context, id uuid.UUID, stockQty int) (domain.Product, error)
+}
+
+type AdminAuditLogger interface {
+	Record(ctx context.Context, entry observability.AuditEntry) error
 }
 
 type AdminCategoryInput struct {
@@ -72,17 +77,30 @@ type ProductWriteInput struct {
 type AdminService struct {
 	categories AdminCategoryRepository
 	products   AdminProductRepository
+	audit      AdminAuditLogger
 }
 
-func NewAdminService(categories AdminCategoryRepository, products AdminProductRepository) *AdminService {
+func NewAdminService(categories AdminCategoryRepository, products AdminProductRepository, audit AdminAuditLogger) *AdminService {
 	return &AdminService{
 		categories: categories,
 		products:   products,
+		audit:      audit,
 	}
 }
 
 func (s *AdminService) ListCategories(ctx context.Context) ([]domain.Category, error) {
-	return s.categories.List(ctx)
+	items, err := s.categories.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.categories_listed",
+		EntityType: "category",
+		Metadata: map[string]any{
+			"count": len(items),
+		},
+	})
+	return items, nil
 }
 
 func (s *AdminService) CreateCategory(ctx context.Context, input AdminCategoryInput) (domain.Category, error) {
@@ -93,14 +111,25 @@ func (s *AdminService) CreateCategory(ctx context.Context, input AdminCategoryIn
 	if err := s.validateCategoryParent(ctx, uuid.Nil, input.ParentID); err != nil {
 		return domain.Category{}, err
 	}
-	return s.categories.Create(ctx, input.ParentID, name, slug)
+	category, err := s.categories.Create(ctx, input.ParentID, name, slug)
+	if err != nil {
+		return domain.Category{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.category_created",
+		EntityType: "category",
+		EntityID:   ptrUUID(category.ID),
+		Metadata:   categoryAuditMetadata(category),
+	})
+	return category, nil
 }
 
 func (s *AdminService) UpdateCategory(ctx context.Context, id uuid.UUID, input AdminCategoryInput) (domain.Category, error) {
 	if id == uuid.Nil {
 		return domain.Category{}, domain.ErrInvalidInput
 	}
-	if _, err := s.categories.GetByID(ctx, id); err != nil {
+	current, err := s.categories.GetByID(ctx, id)
+	if err != nil {
 		return domain.Category{}, err
 	}
 
@@ -111,14 +140,28 @@ func (s *AdminService) UpdateCategory(ctx context.Context, id uuid.UUID, input A
 	if err := s.validateCategoryParent(ctx, id, input.ParentID); err != nil {
 		return domain.Category{}, err
 	}
-	return s.categories.Update(ctx, id, input.ParentID, name, slug)
+	updated, err := s.categories.Update(ctx, id, input.ParentID, name, slug)
+	if err != nil {
+		return domain.Category{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.category_updated",
+		EntityType: "category",
+		EntityID:   ptrUUID(updated.ID),
+		Metadata: map[string]any{
+			"before": categoryAuditMetadata(current),
+			"after":  categoryAuditMetadata(updated),
+		},
+	})
+	return updated, nil
 }
 
 func (s *AdminService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
 	if id == uuid.Nil {
 		return domain.ErrInvalidInput
 	}
-	if _, err := s.categories.GetByID(ctx, id); err != nil {
+	current, err := s.categories.GetByID(ctx, id)
+	if err != nil {
 		return err
 	}
 
@@ -138,7 +181,16 @@ func (s *AdminService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
 		return domain.ErrConflict
 	}
 
-	return s.categories.Delete(ctx, id)
+	if err := s.categories.Delete(ctx, id); err != nil {
+		return err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.category_deleted",
+		EntityType: "category",
+		EntityID:   ptrUUID(current.ID),
+		Metadata:   categoryAuditMetadata(current),
+	})
+	return nil
 }
 
 func (s *AdminService) ListProducts(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error) {
@@ -171,43 +223,122 @@ func (s *AdminService) ListProducts(ctx context.Context, filter domain.ProductFi
 	default:
 		return domain.PageResult[domain.Product]{}, domain.ErrInvalidInput
 	}
-	return s.products.List(ctx, filter)
+	result, err := s.products.List(ctx, filter)
+	if err != nil {
+		return domain.PageResult[domain.Product]{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.products_listed",
+		EntityType: "product",
+		Metadata: map[string]any{
+			"query":       filter.Query,
+			"category_id": uuidToString(filter.CategoryID),
+			"min_price":   floatPtrValue(filter.MinPrice),
+			"max_price":   floatPtrValue(filter.MaxPrice),
+			"in_stock":    boolPtrValue(filter.InStock),
+			"is_active":   boolPtrValue(filter.IsActive),
+			"sort":        filter.Sort,
+			"page":        filter.Page,
+			"limit":       filter.Limit,
+			"items_count": len(result.Items),
+			"total_items": result.Total,
+		},
+	})
+	return result, nil
 }
 
 func (s *AdminService) CreateProduct(ctx context.Context, input AdminProductInput) (domain.Product, error) {
-	writeInput, err := s.normalizeProductInput(ctx, uuid.Nil, input)
+	writeInput, err := s.normalizeProductInput(ctx, domain.Product{}, input)
 	if err != nil {
 		return domain.Product{}, err
 	}
-	return s.products.Create(ctx, writeInput)
+	product, err := s.products.Create(ctx, writeInput)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.product_created",
+		EntityType: "product",
+		EntityID:   ptrUUID(product.ID),
+		Metadata:   productAuditMetadata(product),
+	})
+	return product, nil
 }
 
 func (s *AdminService) UpdateProduct(ctx context.Context, id uuid.UUID, input AdminProductInput) (domain.Product, error) {
-	writeInput, err := s.normalizeProductInput(ctx, id, input)
+	current, err := s.products.GetByIDAny(ctx, id)
 	if err != nil {
 		return domain.Product{}, err
 	}
-	return s.products.Update(ctx, writeInput)
+
+	writeInput, err := s.normalizeProductInput(ctx, current, input)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	updated, err := s.products.Update(ctx, writeInput)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.product_updated",
+		EntityType: "product",
+		EntityID:   ptrUUID(updated.ID),
+		Metadata: map[string]any{
+			"before": productAuditMetadata(current),
+			"after":  productAuditMetadata(updated),
+		},
+	})
+	return updated, nil
 }
 
 func (s *AdminService) UpdateProductStock(ctx context.Context, id uuid.UUID, stockQty int) (domain.Product, error) {
 	if id == uuid.Nil || stockQty < 0 {
 		return domain.Product{}, domain.ErrInvalidInput
 	}
-	if _, err := s.products.GetByIDAny(ctx, id); err != nil {
+	current, err := s.products.GetByIDAny(ctx, id)
+	if err != nil {
 		return domain.Product{}, err
 	}
-	return s.products.UpdateStock(ctx, id, stockQty)
+	updated, err := s.products.UpdateStock(ctx, id, stockQty)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.product_stock_updated",
+		EntityType: "product",
+		EntityID:   ptrUUID(updated.ID),
+		Metadata: map[string]any{
+			"sku":              updated.SKU,
+			"before_stock_qty": current.StockQty,
+			"after_stock_qty":  updated.StockQty,
+		},
+	})
+	return updated, nil
 }
 
 func (s *AdminService) DeleteProduct(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	if id == uuid.Nil {
 		return domain.Product{}, domain.ErrInvalidInput
 	}
-	if _, err := s.products.GetByIDAny(ctx, id); err != nil {
+	current, err := s.products.GetByIDAny(ctx, id)
+	if err != nil {
 		return domain.Product{}, err
 	}
-	return s.products.SetActive(ctx, id, false)
+	updated, err := s.products.SetActive(ctx, id, false)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	s.recordAudit(ctx, observability.AuditEntry{
+		Action:     "admin.product_deleted",
+		EntityType: "product",
+		EntityID:   ptrUUID(updated.ID),
+		Metadata: map[string]any{
+			"soft_delete": true,
+			"before":      productAuditMetadata(current),
+			"after":       productAuditMetadata(updated),
+		},
+	})
+	return updated, nil
 }
 
 func (s *AdminService) validateCategoryParent(ctx context.Context, categoryID uuid.UUID, parentID *uuid.UUID) error {
@@ -247,21 +378,12 @@ func (s *AdminService) validateCategoryParent(ctx context.Context, categoryID uu
 	return nil
 }
 
-func (s *AdminService) normalizeProductInput(ctx context.Context, id uuid.UUID, input AdminProductInput) (ProductWriteInput, error) {
+func (s *AdminService) normalizeProductInput(ctx context.Context, current domain.Product, input AdminProductInput) (ProductWriteInput, error) {
 	if input.CategoryID == uuid.Nil {
 		return ProductWriteInput{}, domain.ErrInvalidInput
 	}
 	if _, err := s.categories.GetByID(ctx, input.CategoryID); err != nil {
 		return ProductWriteInput{}, err
-	}
-
-	var current domain.Product
-	var err error
-	if id != uuid.Nil {
-		current, err = s.products.GetByIDAny(ctx, id)
-		if err != nil {
-			return ProductWriteInput{}, err
-		}
 	}
 
 	name := strings.TrimSpace(input.Name)
@@ -305,7 +427,7 @@ func (s *AdminService) normalizeProductInput(ctx context.Context, id uuid.UUID, 
 	}
 
 	return ProductWriteInput{
-		ID:          id,
+		ID:          current.ID,
 		CategoryID:  input.CategoryID,
 		Name:        name,
 		Slug:        slug,
@@ -321,6 +443,58 @@ func (s *AdminService) normalizeProductInput(ctx context.Context, id uuid.UUID, 
 		StockQty:    input.StockQty,
 		IsActive:    isActive,
 	}, nil
+}
+
+func (s *AdminService) recordAudit(ctx context.Context, entry observability.AuditEntry) {
+	if s.audit == nil {
+		return
+	}
+	_ = s.audit.Record(ctx, entry)
+}
+
+func categoryAuditMetadata(category domain.Category) map[string]any {
+	return map[string]any{
+		"name":      category.Name,
+		"slug":      category.Slug,
+		"parent_id": uuidToString(category.ParentID),
+	}
+}
+
+func productAuditMetadata(product domain.Product) map[string]any {
+	return map[string]any{
+		"category_id":   product.CategoryID.String(),
+		"category_name": product.CategoryName,
+		"name":          product.Name,
+		"slug":          product.Slug,
+		"sku":           product.SKU,
+		"price":         product.Price,
+		"currency":      product.Currency,
+		"stock_qty":     product.StockQty,
+		"is_active":     product.IsActive,
+		"brand":         product.Brand,
+		"unit":          product.Unit,
+	}
+}
+
+func uuidToString(value *uuid.UUID) any {
+	if value == nil || *value == uuid.Nil {
+		return nil
+	}
+	return value.String()
+}
+
+func floatPtrValue(value *float64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func boolPtrValue(value *bool) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func normalizeCategoryPayload(name, slug string) (string, string, error) {

@@ -61,12 +61,15 @@ REFRESH_TOKEN_TTL=720h
 EMAIL_VERIFY_TTL=24h
 PASSWORD_RESET_TTL=1h
 LOG_LEVEL=info
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=admin
 ```
 
 Пояснения:
 - `APP_BASE_URL` нужен для ссылок подтверждения email и сброса пароля.
 - `MAIL_FROM` используется как адрес отправителя.
 - В dev-конфигурации письма не уходят во внешний SMTP: backend пишет их в логи контейнера `api`.
+- `GRAFANA_ADMIN_USER` и `GRAFANA_ADMIN_PASSWORD` задают локальный доступ в Grafana.
 
 Frontend env:
 ```env
@@ -83,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev-all.ps1
 
 Скрипт:
 - создаёт `.env` из `.env.example`, если файла нет
-- поднимает `postgres`, `api`, `adminer`
+- поднимает `postgres`, `api`, `adminer`, `prometheus`, `grafana`
 - ждёт `http://localhost:8080/readyz`
 - ставит frontend-зависимости при необходимости
 - запускает `frontend` через `npm run dev`
@@ -119,6 +122,8 @@ npm run dev
 - backend: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/docs/`
 - Adminer: `http://localhost:8081`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
 
 Остановка:
 ```bash
@@ -172,6 +177,14 @@ npm run build
 
 ## Observability
 - `GET /metrics` - Prometheus metrics endpoint
+- Prometheus в `docker compose` поднимается на `http://localhost:9090`
+- Grafana в `docker compose` поднимается на `http://localhost:3000`
+- default login для локальной Grafana берётся из `.env`:
+  - `GRAFANA_ADMIN_USER`
+  - `GRAFANA_ADMIN_PASSWORD`
+- в Grafana автоматически провиженятся:
+  - datasource `Prometheus`
+  - dashboard `Marketplace Observability`
 - JSON structured logs через `slog`
 - request-level метрики:
   - `marketplace_http_requests_total`
@@ -187,7 +200,17 @@ npm run build
   - panic и internal error capture с `request_id`, route, status и details
 - audit log:
   - таблица `audit_logs`
-  - auth/profile события пишутся в аудит (`register/login/logout/refresh/email verify/password reset/profile update`)
+  - auth/profile/admin события пишутся в аудит
+  - admin CRUD покрыт событиями:
+    - `admin.categories_listed`
+    - `admin.products_listed`
+    - `admin.category_created`
+    - `admin.category_updated`
+    - `admin.category_deleted`
+    - `admin.product_created`
+    - `admin.product_updated`
+    - `admin.product_stock_updated`
+    - `admin.product_deleted`
 
 ## OpenAPI / Swagger
 - Swagger UI: `http://localhost:8080/docs/`

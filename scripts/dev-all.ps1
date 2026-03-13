@@ -17,7 +17,7 @@ try {
     Write-Host 'Update JWT_SECRET in .env before production use.'
   }
 
-  Write-Host 'Starting Docker services (postgres, api, adminer)...'
+  Write-Host 'Starting Docker services (postgres, api, adminer, prometheus, grafana)...'
   docker compose up -d --build
 
   $readyURL = 'http://localhost:8080/readyz'
@@ -39,6 +39,8 @@ try {
 
   if ($ready) {
     Write-Host 'Backend is ready on http://localhost:8080'
+    Write-Host 'Prometheus is available on http://localhost:9090'
+    Write-Host 'Grafana is available on http://localhost:3000'
   }
   else {
     Write-Warning 'Backend readiness check timed out. Use: docker compose logs -f api'
