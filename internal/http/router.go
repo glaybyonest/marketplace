@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"marketplace-backend/apidocs"
 	"marketplace-backend/internal/domain"
 	"marketplace-backend/internal/http/handlers"
 	httpmw "marketplace-backend/internal/http/middleware"
@@ -55,6 +56,14 @@ func NewRouter(deps Dependencies) http.Handler {
 	recommendationsHandler := handlers.NewRecommendationsHandler(deps.RecommendationsService)
 	healthHandler := handlers.NewHealthHandler(deps.DB)
 
+	router.Handle("/docs/", apidocs.UIHandler())
+	router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+		apidocs.RedirectHandler().ServeHTTP(w, r)
+	})
+	router.Get(apidocs.SpecPath, func(w http.ResponseWriter, r *http.Request) {
+		apidocs.SpecHandler().ServeHTTP(w, r)
+	})
+	router.Handle("/docs/*", apidocs.UIHandler())
 	router.Get("/healthz", healthHandler.Healthz)
 	router.Get("/readyz", healthHandler.Readyz)
 	if deps.Metrics != nil {

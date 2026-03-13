@@ -4,7 +4,7 @@ GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
 DB_URL ?= $(DATABASE_URL)
 TEST_DB_URL ?= $(TEST_DATABASE_URL)
 
-.PHONY: up down build run migrate-up migrate-down seed test lint fmt ci frontend-install frontend-dev
+.PHONY: up down build run migrate-up migrate-down seed test lint fmt ci frontend-install frontend-dev openapi-check
 
 up:
 	docker compose up -d --build
@@ -37,6 +37,9 @@ fmt:
 	gofmt -w .
 
 ci: fmt lint test
+
+openapi-check:
+	go test ./apidocs
 
 frontend-install:
 	cd frontend && npm install
