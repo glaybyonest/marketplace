@@ -449,7 +449,7 @@ func (s *AuthService) RequestEmailLoginCode(ctx context.Context, input EmailCode
 		To:      user.Email,
 		From:    s.mailFrom,
 		Subject: "Your login code",
-		Text: greeting + "\n\nUse this code to sign in:\n" + code + "\n\nThe code expires in " + s.loginCodeTTL.Round(time.Minute).String() + ".",
+		Text:    greeting + "\n\nUse this code to sign in:\n" + code + "\n\nThe code expires in " + s.loginCodeTTL.Round(time.Minute).String() + ".",
 	}); err != nil {
 		return domain.AuthCodeDispatch{}, err
 	}
