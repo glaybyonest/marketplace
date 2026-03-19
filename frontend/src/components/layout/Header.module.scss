@@ -57,10 +57,14 @@
   width: 28px;
   height: 28px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #edf5ff, #dfe9ff);
-  color: var(--color-primary);
-  font-size: 0.78rem;
-  font-weight: 800;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.08);
+}
+
+.deliveryBadge svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .utilityLinks {

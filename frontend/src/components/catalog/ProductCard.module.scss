@@ -196,13 +196,23 @@
 .specList li {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   font-size: 0.82rem;
   color: var(--color-text-secondary);
 }
 
+.specList li span {
+  flex: 0 0 auto;
+}
+
 .specList strong {
+  margin-left: auto;
+  max-width: 62%;
   color: var(--color-text-primary);
+  text-align: right;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .priceBlock {

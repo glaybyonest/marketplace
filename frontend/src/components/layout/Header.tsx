@@ -201,7 +201,14 @@ export const Header = () => {
       <div className={styles.utilityBar}>
         <div className={styles.utilityInner}>
           <Link to={auth.isAuthenticated ? '/account/places' : '/login'} className={styles.delivery}>
-            <span className={styles.deliveryBadge}>RU</span>
+            <span className={styles.deliveryBadge} aria-hidden="true">
+              <svg viewBox="0 0 28 28" role="presentation" focusable="false">
+                <rect x="1" y="1" width="26" height="26" rx="9" fill="#fff" />
+                <path d="M1 10.33h26V18H1z" fill="#1f5fff" />
+                <path d="M1 18h26v9H1z" fill="#e53935" />
+                <rect x="1" y="1" width="26" height="26" rx="9" fill="none" stroke="rgba(15, 23, 42, 0.08)" />
+              </svg>
+            </span>
             <div>
               <strong>{deliveryLabel}</strong>
               <span>Доставка и самовывоз</span>
