@@ -11,6 +11,23 @@ export const formatDate = (isoDate: string) =>
     timeStyle: 'short',
   }).format(new Date(isoDate))
 
+export const formatReviewCount = (count: number) => {
+  const absCount = Math.abs(count)
+  const lastTwo = absCount % 100
+  const last = absCount % 10
+
+  if (lastTwo >= 11 && lastTwo <= 14) {
+    return `${count} отзывов`
+  }
+  if (last === 1) {
+    return `${count} отзыв`
+  }
+  if (last >= 2 && last <= 4) {
+    return `${count} отзыва`
+  }
+  return `${count} отзывов`
+}
+
 const UNIT_LABELS: Record<string, string> = {
   piece: 'шт.',
   pieces: 'шт.',

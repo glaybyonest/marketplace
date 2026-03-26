@@ -24,6 +24,11 @@ type CatalogProductRepository interface {
 	TrackSearchQuery(ctx context.Context, query string) error
 }
 
+type CatalogReviewRepository interface {
+	ListByProductID(ctx context.Context, productID uuid.UUID, limit int) ([]domain.Review, error)
+	Create(ctx context.Context, productID, userID uuid.UUID, rating int, comment string) (domain.Review, error)
+}
+
 type CatalogEventRepository interface {
 	Create(ctx context.Context, userID, productID uuid.UUID, eventType string) error
 }
@@ -32,17 +37,20 @@ type CatalogService struct {
 	categories CatalogCategoryRepository
 	products   CatalogProductRepository
 	events     CatalogEventRepository
+	reviews    CatalogReviewRepository
 }
 
 func NewCatalogService(
 	categories CatalogCategoryRepository,
 	products CatalogProductRepository,
 	events CatalogEventRepository,
+	reviews CatalogReviewRepository,
 ) *CatalogService {
 	return &CatalogService{
 		categories: categories,
 		products:   products,
 		events:     events,
+		reviews:    reviews,
 	}
 }
 
@@ -191,6 +199,44 @@ func (s *CatalogService) TrackView(ctx context.Context, userID, productID uuid.U
 		return domain.ErrInvalidInput
 	}
 	return s.events.Create(ctx, userID, productID, domain.ProductEventView)
+}
+
+func (s *CatalogService) ListReviews(ctx context.Context, productID uuid.UUID, limit int) ([]domain.Review, error) {
+	if productID == uuid.Nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.reviews.ListByProductID(ctx, productID, limit)
+}
+
+func (s *CatalogService) AddReview(
+	ctx context.Context,
+	userID, productID uuid.UUID,
+	rating int,
+	comment string,
+) (domain.Review, error) {
+	if userID == uuid.Nil || productID == uuid.Nil {
+		return domain.Review{}, domain.ErrInvalidInput
+	}
+	if rating < 1 || rating > 5 {
+		return domain.Review{}, domain.ErrInvalidInput
+	}
+
+	comment = strings.TrimSpace(comment)
+	if len(comment) < 3 || len(comment) > 1500 {
+		return domain.Review{}, domain.ErrInvalidInput
+	}
+
+	if _, err := s.products.GetByID(ctx, productID); err != nil {
+		return domain.Review{}, err
+	}
+
+	return s.reviews.Create(ctx, productID, userID, rating, comment)
 }
 
 func normalizeSearchQuery(value string) string {

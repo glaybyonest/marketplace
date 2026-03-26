@@ -1,6 +1,4 @@
 import type { CartItem, Product, SellerProfile } from '@/types/domain'
-import { formatCurrency } from '@/utils/format'
-import { getCategoryIconMarkup, resolveCategoryVisual } from '@/utils/categoryIcons'
 
 type ManagedMediaKind = 'product' | 'seller-logo' | 'seller-banner'
 
@@ -15,12 +13,14 @@ interface MediaOptions {
   seed?: string
   title?: string
   subtitle?: string
+  description?: string
   badges?: string[]
   price?: number
   currency?: string
   stock?: number
   categoryName?: string
   sku?: string
+  renderMode?: 'photo' | 'illustration'
 }
 
 interface Palette {
@@ -254,6 +254,634 @@ type ProductVisualKind =
   | 'auto'
   | 'generic'
 
+const PRODUCT_PHOTO_TAGS: Record<ProductVisualKind, string[]> = {
+  phone: ['smartphone', 'electronics', 'product', 'studio'],
+  laptop: ['laptop', 'computer', 'desk', 'technology'],
+  audio: ['headphones', 'audio', 'speaker', 'product'],
+  camera: ['camera', 'photography', 'device', 'product'],
+  gaming: ['gaming', 'controller', 'console', 'product'],
+  router: ['router', 'electronics', 'network', 'device'],
+  appliance: ['appliance', 'kitchen', 'home', 'product'],
+  furniture: ['furniture', 'interior', 'home', 'design'],
+  fashion: ['fashion', 'clothing', 'apparel', 'studio'],
+  shoe: ['shoes', 'sneakers', 'footwear', 'fashion'],
+  beauty: ['cosmetics', 'beauty', 'skincare', 'product'],
+  bag: ['bag', 'accessories', 'fashion', 'product'],
+  book: ['book', 'reading', 'stationery', 'product'],
+  food: ['food', 'grocery', 'packaging', 'product'],
+  tool: ['tools', 'hardware', 'workshop', 'product'],
+  pet: ['pet', 'accessories', 'animal', 'product'],
+  sports: ['fitness', 'sports', 'equipment', 'product'],
+  jewelry: ['jewelry', 'accessories', 'fashion', 'luxury'],
+  baby: ['baby', 'kids', 'nursery', 'product'],
+  auto: ['car', 'automotive', 'accessories', 'product'],
+  generic: ['product', 'shopping', 'retail', 'studio'],
+}
+
+const PRODUCT_VARIANT_TAGS: Record<(typeof PRODUCT_GALLERY_VARIANTS)[number], string[]> = {
+  hero: ['studio', 'isolated'],
+  detail: ['closeup', 'studio'],
+  lifestyle: ['lifestyle', 'interior'],
+}
+
+const PRODUCT_QUERY_HINTS: Array<{ match: string; tags: string[] }> = [
+  { match: 'смартфон', tags: ['smartphone'] },
+  { match: 'телефон', tags: ['smartphone'] },
+  { match: 'iphone', tags: ['smartphone'] },
+  { match: 'android', tags: ['smartphone'] },
+  { match: 'науш', tags: ['headphones'] },
+  { match: 'гарнитур', tags: ['headphones'] },
+  { match: 'колонк', tags: ['speaker'] },
+  { match: 'ноутбук', tags: ['laptop'] },
+  { match: 'монитор', tags: ['monitor'] },
+  { match: 'камера', tags: ['camera'] },
+  { match: 'фотоаппарат', tags: ['camera'] },
+  { match: 'роутер', tags: ['router'] },
+  { match: 'router', tags: ['router'] },
+  { match: 'миксер', tags: ['mixer'] },
+  { match: 'блендер', tags: ['blender'] },
+  { match: 'кофемаш', tags: ['coffee-maker'] },
+  { match: 'чайник', tags: ['kettle'] },
+  { match: 'пылесос', tags: ['vacuum'] },
+  { match: 'лампа', tags: ['lamp'] },
+  { match: 'диван', tags: ['sofa'] },
+  { match: 'кресл', tags: ['armchair'] },
+  { match: 'стол', tags: ['table'] },
+  { match: 'стул', tags: ['chair'] },
+  { match: 'сумк', tags: ['handbag'] },
+  { match: 'рюкзак', tags: ['backpack'] },
+  { match: 'чемодан', tags: ['luggage'] },
+  { match: 'кошелек', tags: ['wallet'] },
+  { match: 'кроссов', tags: ['sneakers'] },
+  { match: 'кеды', tags: ['sneakers'] },
+  { match: 'ботин', tags: ['boots'] },
+  { match: 'туфл', tags: ['heels'] },
+  { match: 'шампун', tags: ['shampoo'] },
+  { match: 'крем', tags: ['cream'] },
+  { match: 'сыворот', tags: ['serum'] },
+  { match: 'помада', tags: ['lipstick'] },
+  { match: 'парф', tags: ['perfume'] },
+  { match: 'книга', tags: ['book'] },
+  { match: 'блокнот', tags: ['notebook'] },
+  { match: 'тетрад', tags: ['notebook'] },
+  { match: 'йога', tags: ['yoga'] },
+  { match: 'гантел', tags: ['dumbbell'] },
+  { match: 'мяч', tags: ['ball'] },
+  { match: 'велосипед', tags: ['bicycle'] },
+  { match: 'самокат', tags: ['scooter'] },
+  { match: 'корм', tags: ['pet-food'] },
+  { match: 'ошейник', tags: ['collar'] },
+  { match: 'коляск', tags: ['stroller'] },
+  { match: 'подгуз', tags: ['diaper'] },
+  { match: 'очки', tags: ['sunglasses'] },
+  { match: 'браслет', tags: ['bracelet'] },
+  { match: 'кольц', tags: ['ring'] },
+  { match: 'серьг', tags: ['earrings'] },
+  { match: 'smartfon', tags: ['smartphone'] },
+  { match: 'naush', tags: ['headphones'] },
+  { match: 'noutbuk', tags: ['laptop'] },
+  { match: 'kolonk', tags: ['speaker'] },
+  { match: 'mikser', tags: ['mixer'] },
+  { match: 'blender', tags: ['blender'] },
+  { match: 'kofemash', tags: ['coffee-maker'] },
+  { match: 'pylesos', tags: ['vacuum'] },
+  { match: 'lamp', tags: ['lamp'] },
+  { match: 'divan', tags: ['sofa'] },
+  { match: 'kreslo', tags: ['armchair'] },
+  { match: 'ryukzak', tags: ['backpack'] },
+  { match: 'sumka', tags: ['handbag'] },
+  { match: 'chemodan', tags: ['luggage'] },
+  { match: 'krossov', tags: ['sneakers'] },
+  { match: 'botin', tags: ['boots'] },
+  { match: 'shampun', tags: ['shampoo'] },
+  { match: 'kniga', tags: ['book'] },
+  { match: 'bloknot', tags: ['notebook'] },
+  { match: 'yoga', tags: ['yoga'] },
+  { match: 'gantel', tags: ['dumbbell'] },
+  { match: 'myach', tags: ['ball'] },
+  { match: 'ochki', tags: ['sunglasses'] },
+  { match: 'braslet', tags: ['bracelet'] },
+]
+
+interface ProductPhotoRule {
+  patterns: string[]
+  tags: string[]
+}
+
+const PRODUCT_PHRASE_RULES: ProductPhotoRule[] = [
+  { patterns: ['chehol-dlya-smartfona', 'chehol-na-telefon'], tags: ['phone-case', 'smartphone'] },
+  { patterns: ['chehol-knizhka'], tags: ['wallet-case', 'smartphone'] },
+  { patterns: ['vodonepronitsaemyy-chehol'], tags: ['waterproof-phone-case', 'smartphone'] },
+  { patterns: ['zaschitnoe-steklo', 'zaschitnaya-plenka'], tags: ['screen-protector', 'smartphone'] },
+  { patterns: ['derzhatel-v-avto', 'magnitnyy-derzhatel', 'derzhatel-dlya-telefona-v-avto'], tags: ['car-phone-holder'] },
+  { patterns: ['koltsevaya-lampa'], tags: ['ring-light'] },
+  { patterns: ['shtativ-dlya-telefona'], tags: ['phone-tripod'] },
+  { patterns: ['monopod-dlya-selfi'], tags: ['selfie-stick'] },
+  { patterns: ['setevoe-zaryadnoe-ustroystvo'], tags: ['wall-charger'] },
+  { patterns: ['avtomobilnoe-zaryadnoe-ustroystvo', 'zaryadka-v-prikurivatel'], tags: ['car-charger'] },
+  { patterns: ['besprovodnaya-zaryadka'], tags: ['wireless-charger'] },
+  { patterns: ['kabel-usb-c', 'zaryadnyy-kabel-lightning', 'zaryadnyy-kabel-micro-usb'], tags: ['charging-cable'] },
+  { patterns: ['perekhodnik-3-5', 'usb-c-hdmi', 'adapter-hdmi', 'bluetooth-adapter'], tags: ['adapter'] },
+  { patterns: ['pauerbank-s-bystroy-zaryadkoy', 'vneshniy-akkumulyator-s-solnechnoy-panelyu'], tags: ['power-bank'] },
+  { patterns: ['vneshniy-zhestkiy-disk', 'vneshniy-hdd'], tags: ['external-hard-drive'] },
+  { patterns: ['ssd-nakopitel', 'vneshniy-ssd'], tags: ['external-ssd'] },
+  { patterns: ['usb-fleshka', 'fleshka-dlya-smartfona'], tags: ['usb-drive'] },
+  { patterns: ['karta-pamyati'], tags: ['memory-card'] },
+  { patterns: ['wi-fi-usilitel'], tags: ['wifi-repeater'] },
+  { patterns: ['smart-lampa'], tags: ['smart-bulb'] },
+  { patterns: ['smart-rozetka'], tags: ['smart-plug'] },
+  { patterns: ['umnaya-kolonka'], tags: ['smart-speaker'] },
+  { patterns: ['veb-kamera', 'webcam'], tags: ['webcam'] },
+  { patterns: ['ekshn-kamera'], tags: ['action-camera'] },
+  { patterns: ['fotoapparat'], tags: ['camera'] },
+  { patterns: ['videokamera'], tags: ['camcorder'] },
+  { patterns: ['ip-kamera'], tags: ['security-camera'] },
+  { patterns: ['videoregistrator'], tags: ['dashcam'] },
+  { patterns: ['gps-navigator'], tags: ['gps-navigator'] },
+  { patterns: ['diktofon'], tags: ['voice-recorder'] },
+  { patterns: ['lazernaya-ukazka'], tags: ['laser-pointer'] },
+  { patterns: ['mini-proektor'], tags: ['projector'] },
+  { patterns: ['elektronnaya-kniga'], tags: ['e-reader'] },
+  { patterns: ['graficheskiy-planshet'], tags: ['drawing-tablet'] },
+  { patterns: ['vr-garnitura'], tags: ['vr-headset'] },
+  { patterns: ['igrovaya-konsol'], tags: ['game-console'] },
+  { patterns: ['dzhoystik', 'geympad'], tags: ['game-controller'] },
+  { patterns: ['besprovodnye-naushniki', 'tws-naushniki'], tags: ['wireless-earbuds'] },
+  { patterns: ['provodnye-naushniki'], tags: ['wired-headphones'] },
+  { patterns: ['portativnaya-kolonka'], tags: ['portable-speaker'] },
+  { patterns: ['domashnyaya-akustika'], tags: ['home-speaker'] },
+  { patterns: ['smart-chasy', 'chasy-naruchnye'], tags: ['watch'] },
+  { patterns: ['fitnes-braslet'], tags: ['fitness-tracker'] },
+  { patterns: ['robot-pylesos'], tags: ['robot-vacuum'] },
+  { patterns: ['vertikalnyy-pylesos', 'pylesos-moyuschiy'], tags: ['vacuum-cleaner'] },
+  { patterns: ['elektrochaynik', 'chaynik-dlya-plity'], tags: ['kettle'] },
+  { patterns: ['kofevarka', 'kofemashina'], tags: ['coffee-maker'] },
+  { patterns: ['pogruzhnoy-blender', 'blender'], tags: ['blender'] },
+  { patterns: ['mikser'], tags: ['stand-mixer'] },
+  { patterns: ['kukhonnyy-kombayn'], tags: ['food-processor'] },
+  { patterns: ['myasorubka'], tags: ['meat-grinder'] },
+  { patterns: ['multivarka', 'skorovarka', 'parovarka'], tags: ['multicooker'] },
+  { patterns: ['aerogril', 'elektrogril'], tags: ['air-fryer'] },
+  { patterns: ['kholodilnik', 'morozilnaya-kamera'], tags: ['refrigerator'] },
+  { patterns: ['stiralnaya-mashina', 'sushilnaya-mashina'], tags: ['washing-machine'] },
+  { patterns: ['posudomoechnaya-mashina'], tags: ['dishwasher'] },
+  { patterns: ['mikrovolnovaya-pech'], tags: ['microwave'] },
+  { patterns: ['duhovoy-shkaf'], tags: ['oven'] },
+  { patterns: ['varochnaya-panel', 'elektricheskaya-plita', 'gazovaya-plita'], tags: ['cooktop'] },
+  { patterns: ['vytyazhka'], tags: ['range-hood'] },
+  { patterns: ['utyug', 'otparivatel'], tags: ['clothes-steamer'] },
+  { patterns: ['shveynaya-mashina'], tags: ['sewing-machine'] },
+  { patterns: ['obogrevatel', 'konvektor', 'teploventilyator'], tags: ['space-heater'] },
+  { patterns: ['konditsioner'], tags: ['air-conditioner'] },
+  { patterns: ['uvlazhnitel-vozdukha', 'ochistitel-vozdukha', 'osushitel-vozdukha'], tags: ['air-purifier'] },
+  { patterns: ['ventilyator-napolnyy'], tags: ['tower-fan'] },
+  { patterns: ['vodonagrevatel'], tags: ['water-heater'] },
+  { patterns: ['elektrokamin'], tags: ['electric-fireplace'] },
+  { patterns: ['sokovyzhimalka'], tags: ['juicer'] },
+  { patterns: ['khlebopechka'], tags: ['bread-maker'] },
+  { patterns: ['yogurtnitsa'], tags: ['yogurt-maker'] },
+  { patterns: ['vafelnitsa'], tags: ['waffle-maker'] },
+  { patterns: ['fen-schetka', 'fen'], tags: ['hair-dryer'] },
+  { patterns: ['elektrobritva'], tags: ['electric-shaver'] },
+  { patterns: ['epilyator'], tags: ['epilator'] },
+  { patterns: ['skovoroda'], tags: ['frying-pan'] },
+  { patterns: ['kastrulya', 'kovsh'], tags: ['cooking-pot'] },
+  { patterns: ['nozh-kukhonnyy', 'nabor-nozhey'], tags: ['kitchen-knife'] },
+  { patterns: ['doska-razdelochnaya'], tags: ['cutting-board'] },
+  { patterns: ['terka'], tags: ['grater'] },
+  { patterns: ['durshlag'], tags: ['colander'] },
+  { patterns: ['konteyner-dlya-edy', 'lanch-boks'], tags: ['food-container'] },
+  { patterns: ['termos-turisticheskiy', 'termos', 'termokruzhka'], tags: ['thermos'] },
+  { patterns: ['butylka-dlya-vody', 'butylka-sportivnaya'], tags: ['water-bottle'] },
+  { patterns: ['tarelka', 'salatnik'], tags: ['plate'] },
+  { patterns: ['kruzhka', 'chashka'], tags: ['mug'] },
+  { patterns: ['stakan', 'bokal'], tags: ['glassware'] },
+  { patterns: ['stolovye-pribory'], tags: ['cutlery'] },
+  { patterns: ['otkryvalka', 'shtopor'], tags: ['bottle-opener'] },
+  { patterns: ['banka-dlya-sypuchikh-produktov'], tags: ['storage-jar'] },
+  { patterns: ['sushilka-dlya-posudy'], tags: ['dish-rack'] },
+  { patterns: ['polotentse-kukhonnoe', 'polotentse-bannoe'], tags: ['towel'] },
+  { patterns: ['podushka'], tags: ['pillow'] },
+  { patterns: ['odeyalo', 'pled'], tags: ['blanket'] },
+  { patterns: ['postelnoe-bele', 'prostynya', 'navolochka'], tags: ['bedding'] },
+  { patterns: ['shtora', 'karniz'], tags: ['curtain'] },
+  { patterns: ['kovrik-dlya-vannoy'], tags: ['bath-mat'] },
+  { patterns: ['korzina-dlya-belya'], tags: ['laundry-basket'] },
+  { patterns: ['divan'], tags: ['sofa'] },
+  { patterns: ['kreslo-ofisnoe', 'ofisnoe-kreslo'], tags: ['office-chair'] },
+  { patterns: ['kreslo-meshok'], tags: ['bean-bag-chair'] },
+  { patterns: ['kreslo'], tags: ['armchair'] },
+  { patterns: ['puf'], tags: ['ottoman'] },
+  { patterns: ['zhurnalnyy-stolik'], tags: ['coffee-table'] },
+  { patterns: ['obedennyy-stol', 'rabochiy-stol', 'stol-kompyuternyy'], tags: ['desk'] },
+  { patterns: ['barnyy-stul'], tags: ['bar-stool'] },
+  { patterns: ['stul'], tags: ['chair'] },
+  { patterns: ['shkaf-kupe', 'knizhnyy-shkaf', 'shkaf'], tags: ['wardrobe'] },
+  { patterns: ['komod'], tags: ['dresser'] },
+  { patterns: ['tumba-prikrovatnaya', 'televizionnaya-tumba'], tags: ['nightstand'] },
+  { patterns: ['krovat-dvuspalnaya', 'krovat-odnospalnaya', 'detskaya-krovatka'], tags: ['bed'] },
+  { patterns: ['matras'], tags: ['mattress'] },
+  { patterns: ['stellazh', 'polka-nastennaya'], tags: ['bookshelf'] },
+  { patterns: ['tualetnyy-stolik'], tags: ['vanity-table'] },
+  { patterns: ['zerkalo-napolnoe', 'zerkalo-nastennoe'], tags: ['mirror'] },
+  { patterns: ['obuvnitsa'], tags: ['shoe-rack'] },
+  { patterns: ['veshalka-napolnaya', 'veshalka-nastennaya'], tags: ['coat-rack'] },
+  { patterns: ['lyustra'], tags: ['chandelier'] },
+  { patterns: ['bras'], tags: ['wall-sconce'] },
+  { patterns: ['torsher'], tags: ['floor-lamp'] },
+  { patterns: ['nastolnaya-lampa'], tags: ['table-lamp'] },
+  { patterns: ['kovrovaya-dorozhka', 'kover'], tags: ['rug'] },
+  { patterns: ['chasy-nastennye'], tags: ['wall-clock'] },
+  { patterns: ['vaza'], tags: ['vase'] },
+  { patterns: ['fotoramka'], tags: ['photo-frame'] },
+  { patterns: ['podsvechnik'], tags: ['candle-holder'] },
+  { patterns: ['kashpo'], tags: ['plant-pot'] },
+  { patterns: ['aromaticheskiy-diffuzor'], tags: ['reed-diffuser'] },
+  { patterns: ['futbolka'], tags: ['t-shirt'] },
+  { patterns: ['mayka'], tags: ['tank-top'] },
+  { patterns: ['rubashka'], tags: ['shirt'] },
+  { patterns: ['bluzka'], tags: ['blouse'] },
+  { patterns: ['svitshot'], tags: ['sweatshirt'] },
+  { patterns: ['khudi'], tags: ['hoodie'] },
+  { patterns: ['sviter'], tags: ['sweater'] },
+  { patterns: ['kardigan'], tags: ['cardigan'] },
+  { patterns: ['zhaket', 'pidzhak'], tags: ['blazer'] },
+  { patterns: ['plate'], tags: ['dress'] },
+  { patterns: ['sarafan'], tags: ['sundress'] },
+  { patterns: ['yubka'], tags: ['skirt'] },
+  { patterns: ['dzhinsy'], tags: ['jeans'] },
+  { patterns: ['bryuki', 'dzhoggery'], tags: ['pants'] },
+  { patterns: ['leginsy'], tags: ['leggings'] },
+  { patterns: ['shorty'], tags: ['shorts'] },
+  { patterns: ['kombinezon'], tags: ['jumpsuit'] },
+  { patterns: ['trench'], tags: ['trench-coat'] },
+  { patterns: ['palto'], tags: ['coat'] },
+  { patterns: ['kurtka', 'bomber', 'anorak'], tags: ['jacket'] },
+  { patterns: ['pukhovik'], tags: ['puffer-jacket'] },
+  { patterns: ['zhilet', 'zhiletka'], tags: ['vest'] },
+  { patterns: ['pizhama'], tags: ['pajamas'] },
+  { patterns: ['khalat'], tags: ['robe'] },
+  { patterns: ['byustgalter'], tags: ['bra'] },
+  { patterns: ['kupalnik'], tags: ['swimsuit'] },
+  { patterns: ['noski'], tags: ['socks'] },
+  { patterns: ['kolgotki'], tags: ['tights'] },
+  { patterns: ['shapka', 'beret', 'kepka', 'panama', 'shlyapa'], tags: ['hat'] },
+  { patterns: ['sharf', 'palantin'], tags: ['scarf'] },
+  { patterns: ['perchatki', 'varezhki'], tags: ['gloves'] },
+  { patterns: ['remen'], tags: ['belt'] },
+  { patterns: ['tapochki', 'tapochki-dlya-dusha'], tags: ['slippers'] },
+  { patterns: ['sportivnyy-kostyum'], tags: ['tracksuit'] },
+  { patterns: ['vetrovka', 'dozhdevik'], tags: ['windbreaker'] },
+  { patterns: ['fartuk'], tags: ['apron'] },
+  { patterns: ['krossovki-begovye', 'begovye-krossovki'], tags: ['running-shoes'] },
+  { patterns: ['basketbolnye-krossovki'], tags: ['basketball-shoes'] },
+  { patterns: ['krossovki'], tags: ['sneakers'] },
+  { patterns: ['kedy'], tags: ['canvas-shoes'] },
+  { patterns: ['botinki-trekkingovye', 'trekkingovye-botinki'], tags: ['hiking-boots'] },
+  { patterns: ['botinki-rabochie', 'rabochie-botinki'], tags: ['work-boots'] },
+  { patterns: ['botinki', 'botilony', 'chelsi', 'bertsy'], tags: ['boots'] },
+  { patterns: ['lofery', 'mokasiny', 'oksfordy', 'derbi'], tags: ['loafers'] },
+  { patterns: ['tufli-na-kabluke', 'tufli-lodochki'], tags: ['heels'] },
+  { patterns: ['baletki'], tags: ['flats'] },
+  { patterns: ['sandalii', 'bosonozhki'], tags: ['sandals'] },
+  { patterns: ['slantsy', 'vetnamki'], tags: ['flip-flops'] },
+  { patterns: ['sapogi', 'uggi', 'valenki'], tags: ['winter-boots'] },
+  { patterns: ['espadrili'], tags: ['espadrilles'] },
+  { patterns: ['sabo', 'klogi'], tags: ['clogs'] },
+  { patterns: ['galoshi'], tags: ['galoshes'] },
+  { patterns: ['cheshki', 'puanty'], tags: ['ballet-shoes'] },
+  { patterns: ['podguzniki'], tags: ['diapers'] },
+  { patterns: ['vlazhnye-salfetki-detskie'], tags: ['baby-wipes'] },
+  { patterns: ['detskiy-krem'], tags: ['baby-cream'] },
+  { patterns: ['detskiy-shampun'], tags: ['baby-shampoo'] },
+  { patterns: ['butylochka-dlya-kormleniya'], tags: ['baby-bottle'] },
+  { patterns: ['soska-pustyshka'], tags: ['pacifier'] },
+  { patterns: ['sterilizator-butylochek'], tags: ['bottle-sterilizer'] },
+  { patterns: ['molokootsos'], tags: ['breast-pump'] },
+  { patterns: ['stulchik-dlya-kormleniya'], tags: ['high-chair'] },
+  { patterns: ['kolyaska'], tags: ['stroller'] },
+  { patterns: ['avtokreslo'], tags: ['car-seat'] },
+  { patterns: ['kenguru-perenoska', 'sling'], tags: ['baby-carrier'] },
+  { patterns: ['bodi', 'polzunki', 'raspashonka'], tags: ['baby-clothes'] },
+  { patterns: ['gorshok'], tags: ['potty-chair'] },
+  { patterns: ['vannochka-dlya-kupaniya'], tags: ['baby-bathtub'] },
+  { patterns: ['prorezyvatel'], tags: ['teether'] },
+  { patterns: ['razvivayuschiy-kovrik'], tags: ['baby-play-mat'] },
+  { patterns: ['mobil-na-krovatku'], tags: ['crib-mobile'] },
+  { patterns: ['radionyanya', 'videonyanya'], tags: ['baby-monitor'] },
+  { patterns: ['nochnik-detskiy'], tags: ['night-light'] },
+  { patterns: ['shampun'], tags: ['shampoo'] },
+  { patterns: ['konditsioner-dlya-volos'], tags: ['conditioner'] },
+  { patterns: ['maska-dlya-volos', 'maska-dlya-litsa'], tags: ['cosmetic-mask'] },
+  { patterns: ['maslo-dlya-volos'], tags: ['hair-oil'] },
+  { patterns: ['rascheska'], tags: ['hair-brush'] },
+  { patterns: ['ployka'], tags: ['curling-iron'] },
+  { patterns: ['utyuzhok-dlya-volos'], tags: ['hair-straightener'] },
+  { patterns: ['trimmer', 'mashinka-dlya-strizhki'], tags: ['trimmer'] },
+  { patterns: ['krem-dlya-litsa', 'krem-dlya-ruk', 'krem-dlya-tela'], tags: ['cream'] },
+  { patterns: ['syvorotka-dlya-litsa'], tags: ['serum'] },
+  { patterns: ['tonik'], tags: ['facial-toner'] },
+  { patterns: ['penka-dlya-umyvaniya'], tags: ['face-cleanser'] },
+  { patterns: ['patchi-dlya-glaz'], tags: ['eye-patches'] },
+  { patterns: ['tonalnyy-krem'], tags: ['foundation'] },
+  { patterns: ['pudra'], tags: ['face-powder'] },
+  { patterns: ['rumyana'], tags: ['blush'] },
+  { patterns: ['khaylayter'], tags: ['highlighter-makeup'] },
+  { patterns: ['tush'], tags: ['mascara'] },
+  { patterns: ['podvodka'], tags: ['eyeliner'] },
+  { patterns: ['teni-dlya-vek'], tags: ['eyeshadow'] },
+  { patterns: ['pomada', 'blesk-dlya-gub', 'balzam-dlya-gub'], tags: ['lipstick'] },
+  { patterns: ['lak-dlya-nogtey', 'gel-lak'], tags: ['nail-polish'] },
+  { patterns: ['gel-dlya-dusha'], tags: ['body-wash'] },
+  { patterns: ['mylo-zhidkoe'], tags: ['liquid-soap'] },
+  { patterns: ['dezodorant'], tags: ['deodorant'] },
+  { patterns: ['dukhi', 'tualetnaya-voda'], tags: ['perfume'] },
+  { patterns: ['britvennyy-stanok'], tags: ['razor'] },
+  { patterns: ['zubnaya-schetka', 'elektricheskaya-zubnaya-schetka'], tags: ['toothbrush'] },
+  { patterns: ['zubnaya-pasta'], tags: ['toothpaste'] },
+  { patterns: ['irrigator'], tags: ['oral-irrigator'] },
+  { patterns: ['manikyurnyy-nabor'], tags: ['manicure-kit'] },
+  { patterns: ['yoga-kovrik'], tags: ['yoga-mat'] },
+  { patterns: ['ganteli'], tags: ['dumbbells'] },
+  { patterns: ['giri'], tags: ['kettlebell'] },
+  { patterns: ['rezinka-fitnes', 'espander'], tags: ['resistance-bands'] },
+  { patterns: ['skakalka'], tags: ['jump-rope'] },
+  { patterns: ['obruch'], tags: ['fitness-hoop'] },
+  { patterns: ['fitbol'], tags: ['exercise-ball'] },
+  { patterns: ['turnik', 'brusya-domashnie'], tags: ['pull-up-bar'] },
+  { patterns: ['velotrenazher'], tags: ['exercise-bike'] },
+  { patterns: ['begovaya-dorozhka'], tags: ['treadmill'] },
+  { patterns: ['ellipticheskiy-trenazher'], tags: ['elliptical-machine'] },
+  { patterns: ['massazhnyy-rolik'], tags: ['foam-roller'] },
+  { patterns: ['sportivnaya-sumka'], tags: ['gym-bag'] },
+  { patterns: ['ryukzak-turisticheskiy'], tags: ['hiking-backpack'] },
+  { patterns: ['palatka'], tags: ['camping-tent'] },
+  { patterns: ['spalnyy-meshok'], tags: ['sleeping-bag'] },
+  { patterns: ['fonar-nalobnyy'], tags: ['headlamp'] },
+  { patterns: ['multitul'], tags: ['multitool'] },
+  { patterns: ['kompas'], tags: ['compass'] },
+  { patterns: ['binokl'], tags: ['binoculars'] },
+  { patterns: ['velosiped'], tags: ['bicycle'] },
+  { patterns: ['samokat-tryukovoy', 'samokat'], tags: ['scooter'] },
+  { patterns: ['roliki'], tags: ['roller-skates'] },
+  { patterns: ['skeytbord'], tags: ['skateboard'] },
+  { patterns: ['myach-futbolnyy', 'myach-basketbolnyy', 'myach-voleybolnyy'], tags: ['sports-ball'] },
+  { patterns: ['raketka-dlya-tennisa', 'raketka-dlya-badmintona'], tags: ['tennis-racket'] },
+  { patterns: ['konki'], tags: ['ice-skates'] },
+  { patterns: ['lyzhi'], tags: ['skis'] },
+  { patterns: ['snoubord'], tags: ['snowboard'] },
+  { patterns: ['maska-gornolyzhnaya'], tags: ['ski-goggles'] },
+  { patterns: ['shlem-velosipednyy'], tags: ['bike-helmet'] },
+  { patterns: ['ochki-dlya-plavaniya'], tags: ['swim-goggles'] },
+  { patterns: ['doska-dlya-sap-serfinga'], tags: ['paddle-board'] },
+  { patterns: ['avtomobilnyy-kompressor'], tags: ['air-compressor'] },
+  { patterns: ['puskovoe-ustroystvo'], tags: ['jump-starter'] },
+  { patterns: ['zaryadnoe-ustroystvo-dlya-akkumulyatora'], tags: ['battery-charger'] },
+  { patterns: ['akkumulyator'], tags: ['car-battery'] },
+  { patterns: ['motornoe-maslo'], tags: ['motor-oil'] },
+  { patterns: ['antifriz', 'tormoznaya-zhidkost', 'omyvatel-stekla'], tags: ['car-fluid'] },
+  { patterns: ['schetka-stekloochistitelya'], tags: ['wiper-blade'] },
+  { patterns: ['chekhly-na-sidenya', 'nakidka-na-sidene'], tags: ['car-seat-cover'] },
+  { patterns: ['kovriki-avtomobilnye'], tags: ['car-floor-mats'] },
+  { patterns: ['organayzer-v-bagazhnik'], tags: ['trunk-organizer'] },
+  { patterns: ['avtomagnitola'], tags: ['car-stereo'] },
+  { patterns: ['kolonki-avtomobilnye'], tags: ['car-speakers'] },
+  { patterns: ['kamera-zadnego-vida'], tags: ['backup-camera'] },
+  { patterns: ['parktronik'], tags: ['parking-sensor'] },
+  { patterns: ['avtopylesos'], tags: ['car-vacuum'] },
+  { patterns: ['domkrat'], tags: ['car-jack'] },
+  { patterns: ['buksirovochnyy-tros'], tags: ['tow-rope'] },
+  { patterns: ['aptechka-avtomobilnaya'], tags: ['first-aid-kit'] },
+  { patterns: ['ognetushitel'], tags: ['fire-extinguisher'] },
+  { patterns: ['kanistra'], tags: ['fuel-can'] },
+  { patterns: ['tsepi-protivoskolzheniya'], tags: ['snow-chains'] },
+  { patterns: ['polirol-dlya-kuzova'], tags: ['car-polish'] },
+  { patterns: ['aromatizator-v-mashinu'], tags: ['car-air-freshener'] },
+  { patterns: ['opletka-na-rul', 'chehol-na-rul'], tags: ['steering-wheel-cover'] },
+  { patterns: ['deflektory-okon'], tags: ['window-deflectors'] },
+  { patterns: ['solntsezaschitnaya-shtorka'], tags: ['car-sunshade'] },
+  { patterns: ['perekhodnik-obd2'], tags: ['obd2-scanner'] },
+  { patterns: ['provoda-prikurivaniya'], tags: ['jumper-cables'] },
+  { patterns: ['termokruzhka-v-podstakannik'], tags: ['travel-mug'] },
+  { patterns: ['drely', 'shurupovert'], tags: ['power-drill'] },
+  { patterns: ['perforator'], tags: ['rotary-hammer'] },
+  { patterns: ['bolgarka'], tags: ['angle-grinder'] },
+  { patterns: ['lobzik'], tags: ['jigsaw'] },
+  { patterns: ['tsirkulyarnaya-pila', 'tortsovochnaya-pila'], tags: ['circular-saw'] },
+  { patterns: ['stroitelnyy-fen'], tags: ['heat-gun'] },
+  { patterns: ['kraskopult'], tags: ['paint-sprayer'] },
+  { patterns: ['svarochnyy-apparat'], tags: ['welding-machine'] },
+  { patterns: ['payalnik'], tags: ['soldering-iron'] },
+  { patterns: ['nabor-otvertok', 'nabor-bit'], tags: ['screwdriver-set'] },
+  { patterns: ['molotok', 'kiyanka'], tags: ['hammer'] },
+  { patterns: ['passatizhi', 'bokorezy'], tags: ['pliers'] },
+  { patterns: ['razvodnoy-klyuch', 'gaechnyy-klyuch', 'shestigranniki'], tags: ['wrench-set'] },
+  { patterns: ['ruletka'], tags: ['tape-measure'] },
+  { patterns: ['lazernyy-uroven', 'uroven'], tags: ['spirit-level'] },
+  { patterns: ['nozh-stroitelnyy'], tags: ['utility-knife'] },
+  { patterns: ['lestnitsa-stremyanka'], tags: ['step-ladder'] },
+  { patterns: ['tachka-stroitelnaya'], tags: ['wheelbarrow'] },
+  { patterns: ['shpatel', 'kelma'], tags: ['putty-knife'] },
+  { patterns: ['malyarnyy-valik'], tags: ['paint-roller'] },
+  { patterns: ['kist-malyarnaya'], tags: ['paint-brush'] },
+  { patterns: ['montazhnaya-pena'], tags: ['expanding-foam'] },
+  { patterns: ['germetik'], tags: ['sealant'] },
+  { patterns: ['cement'], tags: ['cement-bag'] },
+  { patterns: ['shpatlevka'], tags: ['wall-putty'] },
+  { patterns: ['gruntovka'], tags: ['primer-paint'] },
+  { patterns: ['kraska-interernaya', 'lak'], tags: ['paint-can'] },
+  { patterns: ['oboi'], tags: ['wallpaper-roll'] },
+  { patterns: ['plitka-keramicheskaya'], tags: ['ceramic-tile'] },
+  { patterns: ['laminat'], tags: ['laminate-flooring'] },
+  { patterns: ['linoleum'], tags: ['linoleum-roll'] },
+  { patterns: ['rozetka', 'vyklyuchatel'], tags: ['electrical-outlet'] },
+  { patterns: ['udlinitel'], tags: ['extension-cord'] },
+  { patterns: ['sukhoy-korm-dlya-sobak', 'vlazhnyy-korm-dlya-sobak'], tags: ['dog-food'] },
+  { patterns: ['sukhoy-korm-dlya-koshek', 'vlazhnyy-korm-dlya-koshek'], tags: ['cat-food'] },
+  { patterns: ['miska-dlya-korma', 'miska-dlya-vody'], tags: ['pet-bowl'] },
+  { patterns: ['poilka-avtomaticheskaya'], tags: ['pet-water-fountain'] },
+  { patterns: ['kormushka-avtomaticheskaya'], tags: ['automatic-pet-feeder'] },
+  { patterns: ['lezhanka-dlya-sobaki'], tags: ['dog-bed'] },
+  { patterns: ['lezhanka-dlya-koshki'], tags: ['cat-bed'] },
+  { patterns: ['kogtetochka'], tags: ['scratching-post'] },
+  { patterns: ['domik-dlya-koshki'], tags: ['cat-house'] },
+  { patterns: ['napolnitel-dlya-lotka', 'lotok-dlya-koshki'], tags: ['cat-litter-box'] },
+  { patterns: ['osheynik-ot-kleschey', 'osheynik'], tags: ['pet-collar'] },
+  { patterns: ['povodok', 'shleyka'], tags: ['dog-leash'] },
+  { patterns: ['namordnik'], tags: ['dog-muzzle'] },
+  { patterns: ['perenoska-dlya-zhivotnykh', 'ryukzak-perenoska'], tags: ['pet-carrier'] },
+  { patterns: ['akvarium'], tags: ['aquarium'] },
+  { patterns: ['filtr-dlya-akvariuma'], tags: ['aquarium-filter'] },
+  { patterns: ['terrarium'], tags: ['terrarium'] },
+  { patterns: ['schetka-dlya-shersti'], tags: ['pet-grooming-brush'] },
+  { patterns: ['kogterez'], tags: ['pet-nail-clipper'] },
+  { patterns: ['igrushka-dlya-sobak', 'igrushka-dlya-koshek'], tags: ['pet-toy'] },
+  { patterns: ['autogamak-dlya-sobak'], tags: ['dog-car-seat-cover'] },
+  { patterns: ['tetrad', 'bloknot'], tags: ['notebook'] },
+  { patterns: ['ezhednevnik', 'planer'], tags: ['planner'] },
+  { patterns: ['albom-dlya-risovaniya'], tags: ['sketchbook'] },
+  { patterns: ['tsvetnaya-bumaga', 'karton'], tags: ['colored-paper'] },
+  { patterns: ['ruchka-sharikovaya', 'ruchka-gelevaya'], tags: ['pen'] },
+  { patterns: ['karandash', 'karandashi-tsvetnye'], tags: ['pencil'] },
+  { patterns: ['flomastery', 'markery-tekstovye'], tags: ['markers'] },
+  { patterns: ['lastik'], tags: ['eraser'] },
+  { patterns: ['tochilka'], tags: ['pencil-sharpener'] },
+  { patterns: ['lineyka', 'ugolnik'], tags: ['ruler'] },
+  { patterns: ['tsirkul'], tags: ['drawing-compass'] },
+  { patterns: ['kley-karandash', 'kley-pva'], tags: ['glue-stick'] },
+  { patterns: ['nozhnitsy'], tags: ['scissors'] },
+  { patterns: ['stepler', 'skoby-dlya-steplera'], tags: ['stapler'] },
+  { patterns: ['dyrokol'], tags: ['hole-punch'] },
+  { patterns: ['skrepki', 'zazhimy-dlya-bumag'], tags: ['paper-clips'] },
+  { patterns: ['papka-skorosshivatel', 'fayl-vkladysh'], tags: ['folder'] },
+  { patterns: ['konvert'], tags: ['envelope'] },
+  { patterns: ['stikery', 'bumaga-dlya-zametok'], tags: ['sticky-notes'] },
+  { patterns: ['penal'], tags: ['pencil-case'] },
+  { patterns: ['ryukzak-dlya-ucheby', 'ryukzak-shkolnyy'], tags: ['school-backpack'] },
+  { patterns: ['uchebnik', 'kniga-khudozhestvennaya', 'kniga-detskaya', 'slovar', 'atlas', 'entsiklopediya'], tags: ['book'] },
+  { patterns: ['komiks'], tags: ['comic-book'] },
+  { patterns: ['organayzer-nastolnyy', 'podstavka-dlya-ruchek'], tags: ['desk-organizer'] },
+  { patterns: ['zakladki-dlya-knig'], tags: ['bookmark'] },
+  { patterns: ['konstruktor'], tags: ['building-toy'] },
+  { patterns: ['kukla'], tags: ['doll'] },
+  { patterns: ['myagkaya-igrushka'], tags: ['plush-toy'] },
+  { patterns: ['mashinka-igrushechnaya', 'radioupravlyaemaya-mashina'], tags: ['toy-car'] },
+  { patterns: ['zheleznaya-doroga'], tags: ['train-set'] },
+  { patterns: ['robot-igrushechnyy'], tags: ['toy-robot'] },
+  { patterns: ['kvadrokopter-igrushechnyy'], tags: ['toy-drone'] },
+  { patterns: ['pazl'], tags: ['jigsaw-puzzle'] },
+  { patterns: ['nastolnaya-igra'], tags: ['board-game'] },
+  { patterns: ['shakhmaty', 'shashki', 'domino'], tags: ['board-game'] },
+  { patterns: ['molbert-detskiy'], tags: ['easel'] },
+  { patterns: ['plastilin'], tags: ['modeling-clay'] },
+  { patterns: ['kineticheskiy-pesok'], tags: ['kinetic-sand'] },
+  { patterns: ['nabor-dlya-eksperimentov'], tags: ['science-kit'] },
+  { patterns: ['teleskop-detskiy'], tags: ['toy-telescope'] },
+  { patterns: ['mikroskop-detskiy'], tags: ['toy-microscope'] },
+  { patterns: ['muzykalnaya-igrushka', 'ksilofon', 'detskiy-sintezator'], tags: ['kids-musical-toy'] },
+  { patterns: ['kukolnyy-domik'], tags: ['dollhouse'] },
+  { patterns: ['kukhnya-igrushechnaya'], tags: ['play-kitchen'] },
+  { patterns: ['parkovka-igrushechnaya', 'trek-dlya-mashinok'], tags: ['toy-garage'] },
+  { patterns: ['almaznaya-mozaika'], tags: ['diamond-painting-kit'] },
+  { patterns: ['kartina-po-nomeram'], tags: ['paint-by-numbers'] },
+  { patterns: ['fotoalbom'], tags: ['photo-album'] },
+  { patterns: ['nabor-dlya-svechevareniya'], tags: ['candle-making-kit'] },
+  { patterns: ['nabor-dlya-mylovareniya'], tags: ['soap-making-kit'] },
+  { patterns: ['golovolomka'], tags: ['brain-teaser'] },
+  { patterns: ['voda-pitevaya'], tags: ['water-bottle'] },
+  { patterns: ['sok'], tags: ['juice-carton'] },
+  { patterns: ['gazirovannyy-napitok'], tags: ['soft-drink'] },
+  { patterns: ['chay-chernyy', 'chay-zelenyy'], tags: ['tea-box'] },
+  { patterns: ['kofe-zernovoy', 'kofe-molotyy'], tags: ['coffee-bag'] },
+  { patterns: ['moloko', 'kefir', 'yogurt'], tags: ['dairy-product'] },
+  { patterns: ['syr-tverdyy', 'tvorog'], tags: ['cheese'] },
+  { patterns: ['khleb', 'lavash'], tags: ['bread'] },
+  { patterns: ['makarony', 'ris', 'grechka', 'ovsyanka'], tags: ['dry-groceries'] },
+  { patterns: ['muka', 'sakhar', 'sol'], tags: ['baking-ingredients'] },
+  { patterns: ['maslo-olivkovoe', 'podsolnechnoe-maslo'], tags: ['cooking-oil'] },
+  { patterns: ['konservy-rybnye', 'konservy-myasnye', 'tushenka'], tags: ['canned-food'] },
+  { patterns: ['kolbasa', 'sosiski', 'kuritsa', 'govyadina', 'svinina'], tags: ['meat-product'] },
+  { patterns: ['ryba-zamorozhennaya', 'krevetki'], tags: ['seafood'] },
+  { patterns: ['pelmeni', 'vareniki'], tags: ['frozen-food'] },
+  { patterns: ['kartofel', 'luk', 'morkov'], tags: ['vegetables'] },
+  { patterns: ['yabloki', 'banany', 'apelsiny'], tags: ['fruit'] },
+  { patterns: ['orekhi', 'sukhofrukty'], tags: ['nuts'] },
+  { patterns: ['pechene', 'shokolad', 'med', 'dzhem'], tags: ['sweet-snacks'] },
+  { patterns: ['semena'], tags: ['seed-packet'] },
+  { patterns: ['rassada-tsvetov'], tags: ['flower-seedlings'] },
+  { patterns: ['sazhenets-yabloni', 'sazhenets-rozy'], tags: ['sapling'] },
+  { patterns: ['grunt-universalnyy', 'torf'], tags: ['potting-soil'] },
+  { patterns: ['udobrenie'], tags: ['fertilizer-bag'] },
+  { patterns: ['leyka'], tags: ['watering-can'] },
+  { patterns: ['shlang-polivochnyy'], tags: ['garden-hose'] },
+  { patterns: ['sekator', 'sadovye-nozhnitsy'], tags: ['pruning-shears'] },
+  { patterns: ['lopata', 'grabli', 'tyapka', 'motyga'], tags: ['garden-tools'] },
+  { patterns: ['sadovaya-tachka'], tags: ['garden-wheelbarrow'] },
+  { patterns: ['parnik', 'teplitsa'], tags: ['greenhouse'] },
+  { patterns: ['gorshok-dlya-rasteniy', 'kashpo-sadovoe'], tags: ['plant-pot'] },
+  { patterns: ['gazonnokosilka'], tags: ['lawn-mower'] },
+  { patterns: ['trimmer-sadovyy'], tags: ['grass-trimmer'] },
+  { patterns: ['kustorez'], tags: ['hedge-trimmer'] },
+  { patterns: ['pila-sadovaya', 'topor', 'drovokol'], tags: ['garden-saw'] },
+  { patterns: ['mangal'], tags: ['barbecue-grill'] },
+  { patterns: ['reshotka-dlya-grilya', 'shampury'], tags: ['grill-tools'] },
+  { patterns: ['sadovaya-mebel'], tags: ['patio-furniture'] },
+  { patterns: ['zont-sadovyy'], tags: ['patio-umbrella'] },
+  { patterns: ['gamak'], tags: ['hammock'] },
+  { patterns: ['fonar-sadovyy'], tags: ['garden-lantern'] },
+  { patterns: ['skvorechnik', 'kormushka-dlya-ptits'], tags: ['birdhouse'] },
+  { patterns: ['koltso-serebryanoe', 'koltso-zolotoe'], tags: ['ring'] },
+  { patterns: ['sergi-gvozdiki', 'sergi-koltsa'], tags: ['earrings'] },
+  { patterns: ['podveska'], tags: ['pendant'] },
+  { patterns: ['tsepochka-na-nogu', 'tsepochka'], tags: ['necklace'] },
+  { patterns: ['braslet'], tags: ['bracelet'] },
+  { patterns: ['brosh', 'brosh-bulavka'], tags: ['brooch'] },
+  { patterns: ['kole'], tags: ['necklace'] },
+  { patterns: ['choker'], tags: ['choker-necklace'] },
+  { patterns: ['zapanki'], tags: ['cufflinks'] },
+  { patterns: ['zazhim-dlya-galstuka'], tags: ['tie-clip'] },
+  { patterns: ['solntsezaschitnye-ochki'], tags: ['sunglasses'] },
+  { patterns: ['oprava-dlya-ochkov'], tags: ['eyeglasses-frame'] },
+  { patterns: ['koshelek', 'portmone'], tags: ['wallet'] },
+  { patterns: ['vizitnitsa', 'kartholder'], tags: ['card-holder'] },
+  { patterns: ['sumka-shopper'], tags: ['shopper-bag'] },
+  { patterns: ['sumka-cherez-plecho'], tags: ['crossbody-bag'] },
+  { patterns: ['klatch'], tags: ['clutch-bag'] },
+  { patterns: ['ryukzak-gorodskoy'], tags: ['city-backpack'] },
+  { patterns: ['chemodan'], tags: ['suitcase'] },
+  { patterns: ['dorozhnaya-sumka'], tags: ['duffel-bag'] },
+  { patterns: ['zont'], tags: ['umbrella'] },
+  { patterns: ['rezinka-dlya-volos'], tags: ['hair-scrunchie'] },
+  { patterns: ['zakolka-dlya-volos', 'obodok'], tags: ['hair-accessories'] },
+  { patterns: ['kosmetichka'], tags: ['makeup-bag'] },
+  { patterns: ['chekhol-dlya-pasporta'], tags: ['passport-cover'] },
+  { patterns: ['birka-na-bagazh'], tags: ['luggage-tag'] },
+  { patterns: ['klyuchnitsa'], tags: ['key-holder'] },
+  { patterns: ['yuvelirnaya-shkatulka'], tags: ['jewelry-box'] },
+]
+
+const PRODUCT_TOKEN_RULES: ProductPhotoRule[] = [
+  { patterns: ['womens-clothing', 'zhensk'], tags: ['women', 'fashion'] },
+  { patterns: ['mens-clothing', 'muzhsk'], tags: ['men', 'fashion'] },
+  { patterns: ['footwear'], tags: ['footwear'] },
+  { patterns: ['kids', 'detsk'], tags: ['kids'] },
+  { patterns: ['beauty', 'ukhod'], tags: ['beauty'] },
+  { patterns: ['sports', 'sportiv', 'fitnes'], tags: ['sports'] },
+  { patterns: ['auto', 'avto', 'avtomobil'], tags: ['automotive'] },
+  { patterns: ['pets', 'zootovary'], tags: ['pet'] },
+  { patterns: ['stationery', 'books', 'kants'], tags: ['stationery'] },
+  { patterns: ['toys', 'hobbies', 'igrush'], tags: ['toy'] },
+  { patterns: ['garden', 'sadov'], tags: ['garden'] },
+  { patterns: ['jewelry', 'accessories'], tags: ['accessories'] },
+  { patterns: ['home-kitchen', 'kukhon', 'kitchen'], tags: ['kitchen'] },
+  { patterns: ['furniture-interior', 'interior'], tags: ['interior'] },
+  { patterns: ['electronics-gadgets', 'smartphones-accessories', 'computers-office'], tags: ['electronics'] },
+  { patterns: ['food', 'grocery', 'groceries'], tags: ['grocery'] },
+  { patterns: ['product'], tags: ['product'] },
+]
+
+const collectPhotoRuleTags = (source: string, rules: ProductPhotoRule[]) =>
+  rules.flatMap((rule) => (rule.patterns.some((pattern) => source.includes(pattern)) ? rule.tags : []))
+
+const QUERY_CONTEXT_TAGS = new Set([
+  'women',
+  'men',
+  'kids',
+  'fashion',
+  'kitchen',
+  'interior',
+  'electronics',
+  'automotive',
+  'pet',
+  'stationery',
+  'toy',
+  'garden',
+  'grocery',
+  'sports',
+  'accessories',
+  'home',
+])
+
 const containsKeyword = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword))
 
 const detectProductVisualKind = (title: string, categoryName?: string): ProductVisualKind => {
@@ -321,6 +949,117 @@ const detectProductVisualKind = (title: string, categoryName?: string): ProductV
   }
 
   return 'generic'
+}
+
+const normalizePhotoTags = (tags: string[]) =>
+  Array.from(
+    new Set(
+      tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ).slice(0, 6)
+
+const buildProductPhotoSignals = (
+  seed: string,
+  variant: (typeof PRODUCT_GALLERY_VARIANTS)[number],
+  title: string,
+  subtitle: string,
+  description: string,
+  categoryName?: string,
+) => {
+  const source = `${seed} ${title} ${subtitle} ${description} ${categoryName ?? ''}`.toLowerCase()
+  const visualKind = detectProductVisualKind(title, categoryName)
+  const phraseTags = collectPhotoRuleTags(source, PRODUCT_PHRASE_RULES)
+  const tokenTags = collectPhotoRuleTags(source, PRODUCT_TOKEN_RULES)
+  const matchedHints = PRODUCT_QUERY_HINTS.flatMap((hint) => (source.includes(hint.match) ? hint.tags : []))
+  const hasSpecificMatch = phraseTags.length > 0
+
+  return {
+    visualKind,
+    phraseTags: normalizePhotoTags(phraseTags),
+    tokenTags: normalizePhotoTags(tokenTags),
+    matchedHints: normalizePhotoTags(matchedHints),
+    fallbackTags: normalizePhotoTags([
+      ...(hasSpecificMatch ? [] : PRODUCT_PHOTO_TAGS[visualKind]),
+      ...PRODUCT_VARIANT_TAGS[variant],
+    ]),
+    allTags: normalizePhotoTags([
+    ...phraseTags,
+    ...tokenTags,
+    ...matchedHints,
+    ...(hasSpecificMatch ? [] : PRODUCT_PHOTO_TAGS[visualKind]),
+    ...PRODUCT_VARIANT_TAGS[variant],
+    ]),
+  }
+}
+
+const tagToQuery = (value: string) => value.replace(/-/g, ' ').trim()
+
+const normalizeQueryTerms = (terms: string[]) =>
+  Array.from(
+    new Set(
+      terms
+        .map((term) => term.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  )
+
+const createSearchQuery = (...terms: string[]) => normalizeQueryTerms(terms).join(' ')
+
+const buildProductPhotoQueries = (
+  seed: string,
+  variant: (typeof PRODUCT_GALLERY_VARIANTS)[number],
+  title: string,
+  subtitle: string,
+  description: string,
+  categoryName?: string,
+) => {
+  const signals = buildProductPhotoSignals(seed, variant, title, subtitle, description, categoryName)
+  const contextTerms = signals.tokenTags
+    .filter((tag) => QUERY_CONTEXT_TAGS.has(tag))
+    .slice(0, 2)
+    .map(tagToQuery)
+  const variantTerms = variant === 'hero' ? ['isolated'] : variant === 'detail' ? ['closeup'] : []
+
+  const primaryTags = signals.phraseTags.length > 0
+    ? signals.phraseTags
+    : signals.matchedHints.length > 0
+      ? signals.matchedHints
+      : signals.fallbackTags
+
+  const queries = primaryTags.flatMap((tag) => {
+    const query = tagToQuery(tag)
+    const combined = contextTerms.length > 0 ? createSearchQuery(...contextTerms, query) : ''
+    const variantQueries = variantTerms.flatMap((term) => {
+      const combinedWithVariant = combined ? createSearchQuery(combined, term) : ''
+      return [combinedWithVariant, createSearchQuery(query, term)]
+    })
+    return [...variantQueries, combined, query]
+  })
+
+  if (queries.length === 0) {
+    queries.push(createSearchQuery(...signals.allTags.map(tagToQuery)))
+  }
+
+  return Array.from(new Set(queries.filter(Boolean))).slice(0, 6)
+}
+
+const createProductPhotoUrl = (
+  seed: string,
+  variant: (typeof PRODUCT_GALLERY_VARIANTS)[number],
+  title: string,
+  subtitle: string,
+  description: string,
+  categoryName?: string,
+) => {
+  const queries = buildProductPhotoQueries(seed, variant, title, subtitle, description, categoryName)
+  const params = new URLSearchParams()
+  params.set('seed', `${seed}:${variant}`)
+  for (const query of queries) {
+    params.append('query', query)
+  }
+  return `/api/v1/media/product-photo?${params.toString()}`
 }
 
 const renderProductIllustration = (kind: ProductVisualKind, palette: Palette, variant: string, seed: string) => {
@@ -539,17 +1278,8 @@ const renderProductSvg = (
   options: Pick<MediaOptions, 'categoryName' | 'price' | 'currency' | 'stock' | 'sku'>,
 ) => {
   const palette = getPalette(`${seed}:${variant}`)
-  const titleLines = splitLines(title, 22, 2)
-  const categoryVisual = resolveCategoryVisual({ name: options.categoryName || badges[0], title })
-  const variantLabel = variant === 'detail' ? 'Детали' : variant === 'lifestyle' ? 'Подборка' : 'Хит'
-  const lowerCopy = trimText(subtitle || badges[1] || 'Подобрано для витрины', 34)
-  const priceLabel = options.price !== undefined ? formatCurrency(options.price, options.currency) : 'Актуальная цена'
-  const stockLabel =
-    typeof options.stock === 'number' ? (options.stock > 0 ? `${options.stock} в наличии` : 'Под заказ') : 'Уточняйте остаток'
-  const skuLabel = trimText(options.sku ? `Артикул ${options.sku}` : 'Карточка товара', 22)
-  const featureLine = trimText(options.categoryName || badges[0] || 'Каталог', 18)
-  const iconMarkup = getCategoryIconMarkup(categoryVisual.iconKey)
-  const badgeTitle = trimText(options.categoryName || badges[0] || 'Каталог', 20)
+  void subtitle
+  void badges
   const visualKind = detectProductVisualKind(title, options.categoryName)
   const illustrationMarkup = renderProductIllustration(visualKind, palette, variant, seed)
 
@@ -570,49 +1300,8 @@ const renderProductSvg = (
         </linearGradient>
       </defs>
       <rect width="1200" height="1200" rx="56" fill="url(#bg)" />
-      <circle cx="968" cy="188" r="210" fill="${palette.glow}" opacity="0.22" />
-      <circle cx="236" cy="1024" r="192" fill="${palette.accentSoft}" opacity="0.12" />
       <rect x="78" y="78" width="1044" height="808" rx="58" fill="url(#stage)" />
-      <rect x="112" y="112" width="248" height="50" rx="25" fill="${palette.text}" opacity="0.12" />
-      <text x="148" y="145" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="24" font-weight="700">${escapeXml(
-        badgeTitle,
-      )}</text>
-      <rect x="940" y="112" width="148" height="50" rx="25" fill="${palette.text}" opacity="0.12" />
-      <text x="1014" y="145" text-anchor="middle" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="23" font-weight="700">${escapeXml(
-        trimText(variantLabel, 28),
-      )}</text>
       ${illustrationMarkup}
-      ${titleLines
-        .map(
-          (line, index) =>
-            `<text x="120" y="${972 + index * 58}" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="46" font-weight="800">${escapeXml(
-              line,
-            )}</text>`,
-        )
-        .join('')}
-      <text x="120" y="1090" fill="${palette.textMuted}" font-family="Manrope, Segoe UI, sans-serif" font-size="28" font-weight="600">${escapeXml(
-        lowerCopy,
-      )}</text>
-      <rect x="82" y="900" width="1036" height="224" rx="44" fill="${palette.panel}" opacity="0.26" />
-      <rect x="832" y="944" width="250" height="72" rx="24" fill="${palette.text}" opacity="0.12" />
-      <text x="862" y="975" fill="${palette.textMuted}" font-family="Manrope, Segoe UI, sans-serif" font-size="18" font-weight="700">Цена</text>
-      <text x="862" y="1006" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="32" font-weight="800">${escapeXml(
-        trimText(priceLabel, 16),
-      )}</text>
-      <rect x="832" y="1032" width="250" height="58" rx="20" fill="${palette.text}" opacity="0.1" />
-      <text x="862" y="1068" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="21" font-weight="700">${escapeXml(
-        trimText(stockLabel, 20),
-      )}</text>
-      <rect x="120" y="930" width="224" height="56" rx="20" fill="${palette.text}" opacity="0.1" />
-      <g transform="translate(148 946) scale(4.4)" stroke="${palette.text}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
-        ${iconMarkup}
-      </g>
-      <text x="206" y="968" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="22" font-weight="700">${escapeXml(
-        featureLine,
-      )}</text>
-      <text x="120" y="1046" fill="${palette.text}" font-family="Manrope, Segoe UI, sans-serif" font-size="21" font-weight="700">${escapeXml(
-        skuLabel,
-      )}</text>
     </svg>
   `
 
@@ -714,6 +1403,7 @@ export const resolveMediaUrl = (value: string | undefined, options: MediaOptions
   const variant = parsed?.variant ?? 'hero'
   const title = options.title?.trim() || (kind === 'product' ? 'Товар каталога' : 'Магазин продавца')
   const subtitle = options.subtitle?.trim() || ''
+  const description = options.description?.trim() || ''
   const badges = normalizeBadges(options.badges ?? [])
 
   if (kind === 'seller-logo') {
@@ -722,6 +1412,17 @@ export const resolveMediaUrl = (value: string | undefined, options: MediaOptions
 
   if (kind === 'seller-banner') {
     return renderSellerBannerSvg(seed, title, subtitle, badges)
+  }
+
+  if (options.renderMode !== 'illustration') {
+    return createProductPhotoUrl(
+      seed,
+      variant as (typeof PRODUCT_GALLERY_VARIANTS)[number],
+      title,
+      subtitle,
+      description,
+      options.categoryName,
+    )
   }
 
   return renderProductSvg(seed, variant, title, subtitle, badges, options)
@@ -752,6 +1453,24 @@ export const resolveProductImage = (
   })
 }
 
+export const resolveProductImageFallback = (
+  product: Pick<Product, 'id' | 'slug' | 'title' | 'brand' | 'categoryName' | 'sellerName' | 'price' | 'currency' | 'stock' | 'sku'>,
+  index = 0,
+) =>
+  resolveMediaUrl(undefined, {
+    kind: 'product',
+    seed: product.slug || product.id || `product-${index}`,
+    title: product.title,
+    subtitle: product.sellerName || product.brand || product.categoryName || 'РўРѕРІР°СЂ РєР°С‚Р°Р»РѕРіР°',
+    badges: normalizeBadges([product.categoryName, product.brand, product.sellerName]),
+    categoryName: product.categoryName,
+    price: product.price,
+    currency: product.currency,
+    stock: product.stock,
+    sku: product.sku,
+    renderMode: 'illustration',
+  })
+
 export const resolveCartItemImage = (
   item: Pick<CartItem, 'id' | 'productId' | 'slug' | 'title' | 'sellerName' | 'sku' | 'imageUrl' | 'price' | 'currency' | 'stock'>,
 ) =>
@@ -766,6 +1485,30 @@ export const resolveCartItemImage = (
     stock: item.stock,
     sku: item.sku,
   })
+
+export const resolveCartItemImageFallback = (
+  item: Pick<CartItem, 'id' | 'productId' | 'slug' | 'title' | 'sellerName' | 'sku' | 'price' | 'currency' | 'stock'>,
+) =>
+  resolveMediaUrl(undefined, {
+    kind: 'product',
+    seed: item.slug || item.productId || item.id,
+    title: item.title,
+    subtitle: item.sellerName || item.sku || 'РўРѕРІР°СЂ РєР°С‚Р°Р»РѕРіР°',
+    badges: normalizeBadges([item.sellerName, item.sku]),
+    price: item.price,
+    currency: item.currency,
+    stock: item.stock,
+    sku: item.sku,
+    renderMode: 'illustration',
+  })
+
+export const swapImageToFallback = (image: HTMLImageElement, fallbackSrc: string) => {
+  if (!fallbackSrc || image.src === fallbackSrc || image.currentSrc === fallbackSrc) {
+    return
+  }
+
+  image.src = fallbackSrc
+}
 
 export const resolveSellerLogo = (
   profile: Pick<SellerProfile, 'storeSlug' | 'storeName' | 'city' | 'status' | 'logoUrl'>,

@@ -153,37 +153,6 @@
   width: 100%;
 }
 
-.popularStrip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 16px 18px;
-  border-radius: 22px;
-  border: 1px solid var(--color-border);
-  background: #fff;
-  box-shadow: var(--shadow-card);
-}
-
-.popularStrip span {
-  font-weight: 800;
-}
-
-.popularList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.popularItem {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-weight: 700;
-}
-
 .loading {
   display: flex;
   justify-content: center;

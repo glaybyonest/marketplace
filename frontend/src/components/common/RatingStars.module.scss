@@ -1,0 +1,27 @@
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #d55a14;
+  line-height: 1;
+}
+
+.star {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.sizeSm .star {
+  width: 14px;
+  height: 14px;
+}
+
+.sizeMd .star {
+  width: 16px;
+  height: 16px;
+}
+
+.sizeLg .star {
+  width: 18px;
+  height: 18px;
+}

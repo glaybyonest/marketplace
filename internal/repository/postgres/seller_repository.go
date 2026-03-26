@@ -175,8 +175,7 @@ func (r *SellerRepository) ListLowStockProducts(ctx context.Context, userID uuid
 	rows, err := r.db.Query(ctx, `
 		SELECT `+productSelectColumns+`
 		FROM products p
-		INNER JOIN categories c ON c.id = p.category_id
-		LEFT JOIN seller_profiles sp ON sp.user_id = p.seller_id
+		`+productSelectJoins+`
 		WHERE p.seller_id = $1
 		  AND p.is_active = TRUE
 		  AND p.stock_qty <= $2

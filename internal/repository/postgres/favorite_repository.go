@@ -56,8 +56,7 @@ func (r *FavoriteRepository) List(ctx context.Context, userID uuid.UUID, page, l
 		SELECT `+productSelectColumns+`
 		FROM favorites f
 		INNER JOIN products p ON p.id = f.product_id
-		INNER JOIN categories c ON c.id = p.category_id
-		LEFT JOIN seller_profiles sp ON sp.user_id = p.seller_id
+		`+productSelectJoins+`
 		WHERE f.user_id = $1 AND p.is_active = TRUE
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3

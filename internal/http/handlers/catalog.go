@@ -7,9 +7,12 @@ import (
 	"strings"
 
 	"marketplace-backend/internal/domain"
+	"marketplace-backend/internal/http/dto"
+	httpmw "marketplace-backend/internal/http/middleware"
 	"marketplace-backend/internal/http/response"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
@@ -20,17 +23,23 @@ type CatalogService interface {
 	ListProducts(ctx context.Context, filter domain.ProductFilter) (domain.PageResult[domain.Product], error)
 	GetProductByID(ctx context.Context, id uuid.UUID) (domain.Product, error)
 	GetProductBySlug(ctx context.Context, slug string) (domain.Product, error)
+	ListReviews(ctx context.Context, productID uuid.UUID, limit int) ([]domain.Review, error)
+	AddReview(ctx context.Context, userID, productID uuid.UUID, rating int, comment string) (domain.Review, error)
 	SearchSuggestions(ctx context.Context, query string, limit int) ([]domain.SearchSuggestion, error)
 	PopularSearches(ctx context.Context, limit int) ([]domain.PopularSearch, error)
 	TrackView(ctx context.Context, userID, productID uuid.UUID) error
 }
 
 type CatalogHandler struct {
-	service CatalogService
+	service  CatalogService
+	validate *validator.Validate
 }
 
 func NewCatalogHandler(service CatalogService) *CatalogHandler {
-	return &CatalogHandler{service: service}
+	return &CatalogHandler{
+		service:  service,
+		validate: validator.New(validator.WithRequiredStructEnabled()),
+	}
 }
 
 func (h *CatalogHandler) CategoriesTree(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +142,51 @@ func (h *CatalogHandler) ProductBySlug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
+}
+
+func (h *CatalogHandler) ProductReviews(w http.ResponseWriter, r *http.Request) {
+	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
+	if err != nil {
+		writeDomainError(w, r, domain.ErrInvalidInput)
+		return
+	}
+
+	limit := parseIntWithDefault(strings.TrimSpace(r.URL.Query().Get("limit")), 20)
+	items, err := h.service.ListReviews(r.Context(), productID, limit)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, items)
+}
+
+func (h *CatalogHandler) ProductReviewCreate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpmw.UserID(r.Context())
+	if !ok {
+		writeDomainError(w, r, domain.ErrUnauthorized)
+		return
+	}
+
+	productID, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
+	if err != nil {
+		writeDomainError(w, r, domain.ErrInvalidInput)
+		return
+	}
+
+	var req dto.CreateProductReviewRequest
+	if err := decodeAndValidate(r, &req, h.validate); err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+
+	item, err := h.service.AddReview(r.Context(), userID, productID, req.Rating, req.Comment)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, item)
 }
 
 func (h *CatalogHandler) SearchSuggestions(w http.ResponseWriter, r *http.Request) {

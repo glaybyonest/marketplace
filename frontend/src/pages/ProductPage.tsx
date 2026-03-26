@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { ProductGrid } from '@/components/catalog/ProductGrid'
 import { AppLoader } from '@/components/common/AppLoader'
 import { ErrorMessage } from '@/components/common/ErrorMessage'
+import { RatingStars } from '@/components/common/RatingStars'
 import { productService } from '@/services/productService'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { addCartItemThunk } from '@/store/slices/cartSlice'
 import { addFavoriteThunk, removeFavoriteThunk } from '@/store/slices/favoritesSlice'
 import { fetchPlacesThunk } from '@/store/slices/placesSlice'
 import { fetchProductThunk } from '@/store/slices/productsSlice'
-import type { Product } from '@/types/domain'
-import { formatCurrency, formatUnitLabel } from '@/utils/format'
-import { resolveProductImage } from '@/utils/media'
+import type { Product, Review } from '@/types/domain'
+import { formatCurrency, formatDate, formatReviewCount, formatUnitLabel } from '@/utils/format'
+import { getErrorMessage } from '@/utils/error'
+import { resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
 import { formatProductSpecLabel, formatProductSpecValue, getProductSpecEntries } from '@/utils/productSpecs'
 
 import styles from '@/pages/ProductPage.module.scss'
@@ -36,6 +38,12 @@ export const ProductPage = () => {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [relatedItems, setRelatedItems] = useState<Product[]>([])
   const [relatedStatus, setRelatedStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewsStatus, setReviewsStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' })
+  const [reviewSubmitStatus, setReviewSubmitStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!productRef) {
@@ -50,6 +58,46 @@ export const ProductPage = () => {
     }
     dispatch(fetchPlacesThunk())
   }, [auth.isAuthenticated, dispatch, placesStatus])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadReviews = async () => {
+      if (!product?.id) {
+        if (!cancelled) {
+          setReviews([])
+          setReviewsStatus('idle')
+          setReviewsError(null)
+        }
+        return
+      }
+
+      setReviewsStatus('loading')
+      setReviewsError(null)
+
+      try {
+        const items = await productService.getProductReviews(product.id)
+        if (cancelled) {
+          return
+        }
+        setReviews(items)
+        setReviewsStatus('succeeded')
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+        setReviews([])
+        setReviewsStatus('failed')
+        setReviewsError(getErrorMessage(error, 'Не удалось загрузить отзывы'))
+      }
+    }
+
+    void loadReviews()
+
+    return () => {
+      cancelled = true
+    }
+  }, [product?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -105,10 +153,13 @@ export const ProductPage = () => {
     }
 
     const rawGallery = product.images.length > 0 ? product.images : [product.imageUrl ?? '']
-    return rawGallery.map((image, index) => resolveProductImage(product, index, image))
+    return rawGallery.map((image, index) => ({
+      primary: resolveProductImage(product, index, image),
+      fallback: resolveProductImageFallback(product, index),
+    }))
   }, [product])
   const selectedImage = product ? selectedImages[product.id] ?? '' : ''
-  const activeImage = selectedImage && gallery.includes(selectedImage) ? selectedImage : gallery[0]
+  const activeImage = gallery.find((image) => image.primary === selectedImage) ?? gallery[0]
   const quantity = product ? quantities[product.id] ?? 1 : 1
   const safeQuantity = Math.min(quantity, Math.max(product?.stock || 1, 1))
   const specEntries = getProductSpecEntries(product?.specs)
@@ -118,6 +169,12 @@ export const ProductPage = () => {
   const deliveryPlace = places[0]
   const sellerLabel = product?.sellerName || 'Партнёрский магазин'
   const unitLabel = formatUnitLabel(product?.unit) || 'шт.'
+
+  const reviewsCount = Math.max(product?.reviewsCount ?? 0, reviews.length)
+  const averageRating =
+    reviews.length > 0
+      ? Number((reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length).toFixed(1))
+      : Number((product?.rating ?? 0).toFixed(1))
 
   const handleToggleFavorite = async () => {
     if (!product) {
@@ -151,6 +208,32 @@ export const ProductPage = () => {
     navigate('/cart')
   }
 
+  const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!product) {
+      return
+    }
+
+    if (!auth.isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    setReviewSubmitStatus('loading')
+    setReviewSubmitError(null)
+
+    try {
+      const created = await productService.createProductReview(product.id, reviewForm)
+      setReviews((current) => [created, ...current])
+      setReviewForm({ rating: 5, comment: '' })
+      setReviewSubmitStatus('succeeded')
+    } catch (error) {
+      setReviewSubmitStatus('failed')
+      setReviewSubmitError(getErrorMessage(error, 'Не удалось отправить отзыв'))
+    }
+  }
+
   if (detailStatus === 'loading') {
     return <AppLoader label="Загружаем карточку товара..." />
   }
@@ -180,16 +263,20 @@ export const ProductPage = () => {
               {gallery.map((image, index) => (
                 <button
                   type="button"
-                  key={`${image}-${index}`}
-                  className={image === activeImage ? styles.thumbActive : styles.thumb}
+                  key={`${image.primary}-${index}`}
+                  className={image.primary === activeImage?.primary ? styles.thumbActive : styles.thumb}
                   onClick={() =>
                     setSelectedImages((current) => ({
                       ...current,
-                      [product.id]: image,
+                      [product.id]: image.primary,
                     }))
                   }
                 >
-                  <img src={image} alt={`${product.title} ${index + 1}`} />
+                  <img
+                    src={image.primary}
+                    alt={`${product.title} ${index + 1}`}
+                    onError={(event) => swapImageToFallback(event.currentTarget, image.fallback)}
+                  />
                 </button>
               ))}
             </div>
@@ -199,7 +286,12 @@ export const ProductPage = () => {
                 {product.categoryName ? <span className="badge-pill">{product.categoryName}</span> : null}
                 {savings > 0 ? <span className={`${styles.discountBadge} badge-pill`}>Экономия {formatCurrency(savings, product.currency)}</span> : null}
               </div>
-              <img src={activeImage} alt={product.title} className={styles.mainImage} />
+              <img
+                src={activeImage?.primary}
+                alt={product.title}
+                className={styles.mainImage}
+                onError={(event) => swapImageToFallback(event.currentTarget, activeImage?.fallback ?? '')}
+              />
             </div>
           </div>
         </div>
@@ -215,7 +307,7 @@ export const ProductPage = () => {
             <h1 className={styles.title}>{product.title}</h1>
 
             <div className={styles.metaRow}>
-              <span>Рейтинг {product.rating ? product.rating.toFixed(1) : '4.8'} / 5</span>
+              <span>{reviewsCount > 0 ? `Рейтинг ${averageRating.toFixed(1)} / 5 - ${formatReviewCount(reviewsCount)}` : 'Пока нет отзывов'}</span>
               <span>{product.categoryName ?? 'Категория каталога'}</span>
               <span>{sellerLabel}</span>
               <span>{isAvailable ? `В наличии: ${product.stock}` : 'Под заказ'}</span>
@@ -224,6 +316,12 @@ export const ProductPage = () => {
             <div className={styles.priceRow}>
               <strong className={styles.currentPrice}>{formatCurrency(product.price, product.currency)}</strong>
               {savings > 0 ? <span className={styles.oldPrice}>{formatCurrency(oldPrice, product.currency)}</span> : null}
+            </div>
+
+            <div className={styles.reviewSummaryBar}>
+              <RatingStars rating={reviewsCount > 0 ? averageRating : 0} size="md" />
+              <strong>{reviewsCount > 0 ? `${averageRating.toFixed(1)} / 5` : 'Новый товар'}</strong>
+              <span>{reviewsCount > 0 ? formatReviewCount(reviewsCount) : 'Пока без отзывов и комментариев'}</span>
             </div>
 
             <div className={isAvailable ? styles.stockChipActive : styles.stockChip}>
@@ -295,6 +393,124 @@ export const ProductPage = () => {
               </dl>
             </section>
           ) : null}
+
+          <section className={`${styles.sectionCard} page-card`}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <span className="badge-pill">Отзывы</span>
+                <h2>Отзывы и комментарии</h2>
+                <p>
+                  {reviewsCount > 0
+                    ? `Средняя оценка ${averageRating.toFixed(1)} из 5 на основе ${formatReviewCount(reviewsCount)}.`
+                    : 'Станьте первым, кто оставит отзыв об этом товаре.'}
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.reviewsStats}>
+              <article className={styles.reviewStatCard}>
+                <RatingStars rating={reviewsCount > 0 ? averageRating : 0} size="md" />
+                <span>Средняя оценка</span>
+                <strong>{reviewsCount > 0 ? averageRating.toFixed(1) : '0.0'}</strong>
+              </article>
+              <article className={styles.reviewStatCard}>
+                <span>Всего отзывов</span>
+                <strong>{reviewsCount > 0 ? formatReviewCount(reviewsCount) : 'Пока нет'}</strong>
+              </article>
+            </div>
+
+            {auth.isAuthenticated ? (
+              <form className={styles.reviewForm} onSubmit={handleReviewSubmit}>
+                <div className={styles.reviewFormGrid}>
+                  <label className={styles.reviewField}>
+                    <span>Оценка</span>
+                    <select
+                      value={reviewForm.rating}
+                      onChange={(event) =>
+                        setReviewForm((current) => ({
+                          ...current,
+                          rating: Number(event.target.value),
+                        }))
+                      }
+                    >
+                      <option value={5}>5 / 5</option>
+                      <option value={4}>4 / 5</option>
+                      <option value={3}>3 / 5</option>
+                      <option value={2}>2 / 5</option>
+                      <option value={1}>1 / 5</option>
+                    </select>
+                    <RatingStars rating={reviewForm.rating} size="md" />
+                  </label>
+
+                  <label className={`${styles.reviewField} ${styles.reviewFieldWide}`}>
+                    <span>Комментарий</span>
+                    <textarea
+                      rows={4}
+                      maxLength={1500}
+                      value={reviewForm.comment}
+                      onChange={(event) =>
+                        setReviewForm((current) => ({
+                          ...current,
+                          comment: event.target.value,
+                        }))
+                      }
+                      placeholder="Что понравилось, как товар показал себя в использовании, что стоит учесть."
+                    />
+                  </label>
+                </div>
+
+                <div className={styles.reviewFormActions}>
+                  <button
+                    type="submit"
+                    className="action-primary"
+                    disabled={reviewSubmitStatus === 'loading' || reviewForm.comment.trim().length < 3}
+                  >
+                    {reviewSubmitStatus === 'loading' ? 'Отправляем...' : 'Оставить отзыв'}
+                  </button>
+                  {reviewSubmitStatus === 'succeeded' ? (
+                    <span className={styles.reviewSuccess}>Спасибо, отзыв опубликован.</span>
+                  ) : null}
+                  {reviewSubmitError ? <span className={styles.reviewError}>{reviewSubmitError}</span> : null}
+                </div>
+              </form>
+            ) : (
+              <div className={styles.reviewGuestCard}>
+                <p>Войдите в аккаунт, чтобы оставить отзыв и комментарий к товару.</p>
+                <button type="button" className="action-secondary" onClick={() => navigate('/login')}>
+                  Войти
+                </button>
+              </div>
+            )}
+
+            {reviewsStatus === 'loading' ? (
+              <AppLoader label="Загружаем отзывы..." />
+            ) : reviewsError ? (
+              <ErrorMessage message={reviewsError} />
+            ) : reviews.length > 0 ? (
+              <div className={styles.reviewList}>
+                {reviews.map((review) => (
+                  <article key={review.id} className={styles.reviewCard}>
+                    <div className={styles.reviewCardHeader}>
+                      <div>
+                        <strong>{review.userName}</strong>
+                        <span>{formatDate(review.createdAt)}</span>
+                      </div>
+                      <div className={styles.reviewRatingGroup}>
+                        <RatingStars rating={review.rating} size="sm" />
+                        <span className={styles.reviewRating}>{review.rating} / 5</span>
+                      </div>
+                    </div>
+                    <p>{review.comment}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyReviews}>
+                <strong>Пока нет отзывов</strong>
+                <p>Первый комментарий появится здесь сразу после публикации.</p>
+              </div>
+            )}
+          </section>
         </div>
 
         <aside className={`${styles.purchasePanel} summary-card`}>

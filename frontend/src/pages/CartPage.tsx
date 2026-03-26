@@ -11,7 +11,7 @@ import {
   updateCartItemThunk,
 } from '@/store/slices/cartSlice'
 import { formatCurrency } from '@/utils/format'
-import { resolveCartItemImage } from '@/utils/media'
+import { resolveCartItemImage, resolveCartItemImageFallback, swapImageToFallback } from '@/utils/media'
 import { getProductPath } from '@/utils/productRef'
 
 import styles from '@/pages/CartPage.module.scss'
@@ -89,7 +89,12 @@ export const CartPage = () => {
             {items.map((item) => (
               <article key={item.id} className={styles.item}>
                 <Link to={getProductPath(item)} className={styles.imageWrap}>
-                  <img src={resolveCartItemImage(item)} alt={item.title} className={styles.image} />
+                  <img
+                    src={resolveCartItemImage(item)}
+                    alt={item.title}
+                    className={styles.image}
+                    onError={(event) => swapImageToFallback(event.currentTarget, resolveCartItemImageFallback(item))}
+                  />
                 </Link>
 
                 <div className={styles.itemMain}>

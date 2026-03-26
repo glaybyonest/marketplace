@@ -73,6 +73,15 @@ func NewRouter(deps Dependencies) http.Handler {
 	recommendationsHandler := handlers.NewRecommendationsHandler(deps.RecommendationsService)
 	sellerHandler := handlers.NewSellerHandler(deps.SellerService)
 	healthHandler := handlers.NewHealthHandler(deps.DB)
+	mediaHandler := handlers.NewMediaHandler(nil)
+	scopedRatePolicy := func(policy httpmw.RateLimitPolicy, scope string) httpmw.RateLimitPolicy {
+		if policy.Name == "" {
+			policy.Name = scope
+			return policy
+		}
+		policy.Name = policy.Name + "_" + scope
+		return policy
+	}
 
 	router.Handle("/docs/", apidocs.UIHandler())
 	router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +98,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
+		r.Get("/media/product-photo", mediaHandler.ProductPhoto)
+
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(httpmw.NoStore)
 
@@ -99,10 +110,10 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.With(deps.RateLimiter.Middleware(deps.Security.LoginRatePolicy)).Post("/login/phone/request", authHandler.RequestPhoneLoginCode)
 			r.With(deps.RateLimiter.Middleware(deps.Security.LoginRatePolicy)).Post("/login/phone/confirm", authHandler.LoginWithPhoneCode)
 			r.With(deps.RateLimiter.Middleware(deps.Security.RefreshRatePolicy), csrfMiddleware.Handler).Post("/refresh", authHandler.Refresh)
-			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/request", authHandler.RequestEmailVerification)
-			r.With(deps.RateLimiter.Middleware(deps.Security.VerifyEmailRatePolicy)).Post("/verify-email/confirm", authHandler.ConfirmEmailVerification)
-			r.With(deps.RateLimiter.Middleware(deps.Security.PasswordResetRatePolicy)).Post("/password-reset/request", authHandler.RequestPasswordReset)
-			r.With(deps.RateLimiter.Middleware(deps.Security.PasswordResetRatePolicy)).Post("/password-reset/confirm", authHandler.ConfirmPasswordReset)
+			r.With(deps.RateLimiter.Middleware(scopedRatePolicy(deps.Security.VerifyEmailRatePolicy, "request"))).Post("/verify-email/request", authHandler.RequestEmailVerification)
+			r.With(deps.RateLimiter.Middleware(scopedRatePolicy(deps.Security.VerifyEmailRatePolicy, "confirm"))).Post("/verify-email/confirm", authHandler.ConfirmEmailVerification)
+			r.With(deps.RateLimiter.Middleware(scopedRatePolicy(deps.Security.PasswordResetRatePolicy, "request"))).Post("/password-reset/request", authHandler.RequestPasswordReset)
+			r.With(deps.RateLimiter.Middleware(scopedRatePolicy(deps.Security.PasswordResetRatePolicy, "confirm"))).Post("/password-reset/confirm", authHandler.ConfirmPasswordReset)
 
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.Handler)
@@ -125,6 +136,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		r.Get("/products", catalogHandler.ProductsList)
 		r.Get("/products/slug/{slug}", catalogHandler.ProductBySlug)
 		r.Get("/products/{id}", catalogHandler.ProductByID)
+		r.Get("/products/{id}/reviews", catalogHandler.ProductReviews)
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.Handler)
@@ -153,6 +165,7 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Get("/orders/{id}", ordersHandler.GetByID)
 
 			r.Get("/recommendations", recommendationsHandler.List)
+			r.Post("/products/{id}/reviews", catalogHandler.ProductReviewCreate)
 
 			r.Get("/seller/profile", sellerHandler.GetProfile)
 			r.Put("/seller/profile", sellerHandler.UpsertProfile)

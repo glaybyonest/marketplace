@@ -156,6 +156,20 @@
   gap: 10px 14px;
 }
 
+.reviewSummaryBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.reviewSummaryBar strong {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+}
+
 .currentPrice {
   font-size: clamp(2rem, 2.8vw, 3rem);
   line-height: 1;
@@ -285,6 +299,162 @@
   font-weight: 800;
 }
 
+.reviewsStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reviewStatCard {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 20px;
+  background: #fff8f8;
+  border: 1px solid var(--color-border);
+}
+
+.reviewStatCard span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.reviewForm {
+  display: grid;
+  gap: 14px;
+}
+
+.reviewFormGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.reviewField {
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.reviewFieldWide {
+  align-content: start;
+}
+
+.reviewField select,
+.reviewField textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.reviewField select {
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.reviewField textarea {
+  min-height: 124px;
+  padding: 14px 16px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.reviewFormActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+}
+
+.reviewSuccess {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.reviewError {
+  color: #c42454;
+  font-weight: 700;
+}
+
+.reviewGuestCard,
+.emptyReviews {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fff, #fff7f7);
+  border: 1px solid var(--color-border);
+}
+
+.reviewGuestCard p,
+.emptyReviews p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.reviewList {
+  display: grid;
+  gap: 12px;
+}
+
+.reviewCard {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fff, #fff9f9);
+  border: 1px solid var(--color-border);
+}
+
+.reviewCardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.reviewCardHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.reviewCardHeader span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.reviewRatingGroup {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reviewRating {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.reviewCard p {
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+
 .purchasePanel {
   position: sticky;
   top: 126px;
@@ -391,6 +561,8 @@
   .layout,
   .galleryRail,
   .statsGrid,
+  .reviewsStats,
+  .reviewFormGrid,
   .specRow {
     grid-template-columns: 1fr;
   }

@@ -46,10 +46,22 @@ type Product struct {
 	Brand        string         `json:"brand,omitempty"`
 	Unit         string         `json:"unit,omitempty"`
 	Specs        map[string]any `json:"specs,omitempty"`
+	Rating       float64        `json:"rating"`
+	ReviewsCount int            `json:"reviews_count"`
 	StockQty     int            `json:"stock_qty"`
 	IsActive     bool           `json:"is_active"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
+type Review struct {
+	ID        uuid.UUID  `json:"id"`
+	ProductID uuid.UUID  `json:"product_id"`
+	UserID    *uuid.UUID `json:"user_id,omitempty"`
+	UserName  string     `json:"user_name"`
+	Rating    int        `json:"rating"`
+	Comment   string     `json:"comment"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // ProductFilter describes catalog list query.

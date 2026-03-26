@@ -4,9 +4,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { addCartItemThunk } from '@/store/slices/cartSlice'
 import { addFavoriteThunk, removeFavoriteThunk } from '@/store/slices/favoritesSlice'
+import { RatingStars } from '@/components/common/RatingStars'
 import type { Product } from '@/types/domain'
-import { formatCurrency } from '@/utils/format'
-import { resolveProductImage } from '@/utils/media'
+import { formatCurrency, formatReviewCount } from '@/utils/format'
+import { resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
 import { formatProductSpecLabel, formatProductSpecValue, getProductSpecEntries } from '@/utils/productSpecs'
 import { getProductPath } from '@/utils/productRef'
 
@@ -19,11 +20,13 @@ interface ProductCardProps {
 export const ProductCard = ({ product }: ProductCardProps) => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
-  const [imageLoaded, setImageLoaded] = useState(false)
+  const [loadedImageSrc, setLoadedImageSrc] = useState('')
   const auth = useAppSelector((state) => state.auth)
   const favoriteItems = useAppSelector((state) => state.favorites.items)
   const cartStatus = useAppSelector((state) => state.cart.mutationStatus)
   const image = useMemo(() => resolveProductImage(product), [product])
+  const fallbackImage = useMemo(() => resolveProductImageFallback(product), [product])
+  const imageLoaded = loadedImageSrc === image
 
   const specPreview = useMemo(() => getProductSpecEntries(product.specs, 2), [product.specs])
 
@@ -31,6 +34,9 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   const oldPrice = Math.round(product.price * (1 + discount / 100))
   const isFavorite = favoriteItems.some((item) => item.id === product.id)
   const productPath = getProductPath(product)
+  const reviewsCount = product.reviewsCount ?? 0
+  const hasReviews = reviewsCount > 0
+
   const sellerLabel = product.sellerName || 'Партнерский магазин'
 
   const handleFavorite = async () => {
@@ -79,7 +85,11 @@ export const ProductCard = ({ product }: ProductCardProps) => {
           alt={product.title}
           loading="lazy"
           className={imageLoaded ? styles.imageLoaded : styles.image}
-          onLoad={() => setImageLoaded(true)}
+          onLoad={() => setLoadedImageSrc(image)}
+          onError={(event) => {
+            swapImageToFallback(event.currentTarget, fallbackImage)
+            setLoadedImageSrc(image)
+          }}
         />
       </Link>
 
@@ -92,6 +102,12 @@ export const ProductCard = ({ product }: ProductCardProps) => {
         <h3 className={styles.title}>
           <Link to={productPath}>{product.title}</Link>
         </h3>
+
+        <div className={styles.reviewSummary}>
+          <RatingStars rating={hasReviews ? product.rating : 0} size="sm" />
+          <strong>{hasReviews ? `${product.rating.toFixed(1)} / 5` : 'Новый товар'}</strong>
+          <span>{hasReviews ? formatReviewCount(reviewsCount) : 'Пока без отзывов'}</span>
+        </div>
 
         {specPreview.length > 0 ? (
           <ul className={styles.specList}>

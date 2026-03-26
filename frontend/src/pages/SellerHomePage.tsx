@@ -11,7 +11,7 @@ import { fetchProfileThunk } from '@/store/slices/userSlice'
 import type { SellerDashboard } from '@/types/domain'
 import { getErrorMessage } from '@/utils/error'
 import { formatCurrency, formatDate } from '@/utils/format'
-import { resolveProductImage, resolveSellerBanner, resolveSellerLogo } from '@/utils/media'
+import { resolveProductImage, resolveProductImageFallback, resolveSellerBanner, resolveSellerLogo, swapImageToFallback } from '@/utils/media'
 
 import styles from '@/pages/SellerPage.module.scss'
 
@@ -440,7 +440,12 @@ export const SellerHomePage = () => {
             ) : (
               dashboard.recentProducts.map((product) => (
                 <article key={product.id} className={styles.listCard}>
-                  <img className={styles.mediaThumb} src={resolveProductImage(product)} alt={product.title} />
+                  <img
+                    className={styles.mediaThumb}
+                    src={resolveProductImage(product)}
+                    alt={product.title}
+                    onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(product))}
+                  />
                   <div className={styles.listHeader}>
                     <div>
                       <h3>{product.title}</h3>

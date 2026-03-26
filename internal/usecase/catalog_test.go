@@ -100,6 +100,47 @@ func (m *eventRepoMock) Create(ctx context.Context, userID, productID uuid.UUID,
 	return m.err
 }
 
+type reviewRepoMock struct {
+	items          []domain.Review
+	lastProductID  uuid.UUID
+	lastLimit      int
+	lastCreateUser uuid.UUID
+	lastCreateItem uuid.UUID
+	lastRating     int
+	lastComment    string
+	createResult   domain.Review
+	listErr        error
+	createErr      error
+}
+
+func (m *reviewRepoMock) ListByProductID(ctx context.Context, productID uuid.UUID, limit int) ([]domain.Review, error) {
+	m.lastProductID = productID
+	m.lastLimit = limit
+	return m.items, m.listErr
+}
+
+func (m *reviewRepoMock) Create(ctx context.Context, productID, userID uuid.UUID, rating int, comment string) (domain.Review, error) {
+	m.lastCreateItem = productID
+	m.lastCreateUser = userID
+	m.lastRating = rating
+	m.lastComment = comment
+	if m.createErr != nil {
+		return domain.Review{}, m.createErr
+	}
+	if m.createResult.ID != uuid.Nil {
+		return m.createResult, nil
+	}
+	return domain.Review{
+		ID:        uuid.New(),
+		ProductID: productID,
+		UserID:    &userID,
+		UserName:  "Tester",
+		Rating:    rating,
+		Comment:   comment,
+		CreatedAt: time.Now().UTC(),
+	}, nil
+}
+
 func TestCatalogService(t *testing.T) {
 	rootID := uuid.New()
 	childID := uuid.New()
@@ -129,7 +170,12 @@ func TestCatalogService(t *testing.T) {
 		},
 	}
 	events := &eventRepoMock{}
-	service := NewCatalogService(categories, products, events)
+	reviews := &reviewRepoMock{
+		items: []domain.Review{
+			{ID: uuid.New(), ProductID: productID, UserName: "Reviewer", Rating: 5, Comment: "Great", CreatedAt: now},
+		},
+	}
+	service := NewCatalogService(categories, products, events, reviews)
 
 	t.Run("categories", func(t *testing.T) {
 		tests := []struct {
@@ -287,6 +333,42 @@ func TestCatalogService(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("reviews", func(t *testing.T) {
+		userID := uuid.New()
+
+		items, err := service.ListReviews(context.Background(), productID, 50)
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		assert.Equal(t, productID, reviews.lastProductID)
+		assert.Equal(t, 50, reviews.lastLimit)
+
+		_, err = service.ListReviews(context.Background(), uuid.Nil, 10)
+		require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+		created, err := service.AddReview(context.Background(), userID, productID, 5, "  Excellent value and build quality  ")
+		require.NoError(t, err)
+		assert.Equal(t, productID, reviews.lastCreateItem)
+		assert.Equal(t, userID, reviews.lastCreateUser)
+		assert.Equal(t, 5, reviews.lastRating)
+		assert.Equal(t, "Excellent value and build quality", reviews.lastComment)
+		assert.Equal(t, "Excellent value and build quality", created.Comment)
+
+		_, err = service.AddReview(context.Background(), uuid.Nil, productID, 5, "test")
+		require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+		_, err = service.AddReview(context.Background(), userID, uuid.Nil, 5, "test")
+		require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+		_, err = service.AddReview(context.Background(), userID, productID, 0, "test")
+		require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+		_, err = service.AddReview(context.Background(), userID, productID, 5, "  ")
+		require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+		_, err = service.AddReview(context.Background(), userID, uuid.New(), 5, "test comment")
+		require.ErrorIs(t, err, domain.ErrNotFound)
 	})
 }
 

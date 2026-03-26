@@ -57,6 +57,7 @@ export interface Product {
   categoryName?: string
   sellerId?: string
   stock?: number
+  reviewsCount?: number
   isPublished?: boolean
   isActive?: boolean
   isFavorite?: boolean

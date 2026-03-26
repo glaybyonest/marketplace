@@ -76,10 +76,10 @@ interface ContentProps {
 }
 
 const Content = ({ categories, values, onChange, onReset, onClose, panelId }: ContentProps) => {
-  const [categoryOpen, setCategoryOpen] = useState(true)
-  const [priceOpen, setPriceOpen] = useState(true)
-  const [stockOpen, setStockOpen] = useState(true)
-  const [sortOpen, setSortOpen] = useState(true)
+  const [categoryOpen, setCategoryOpen] = useState(false)
+  const [priceOpen, setPriceOpen] = useState(false)
+  const [stockOpen, setStockOpen] = useState(false)
+  const [sortOpen, setSortOpen] = useState(false)
 
   const hasActiveFilters =
     values.category_id ||

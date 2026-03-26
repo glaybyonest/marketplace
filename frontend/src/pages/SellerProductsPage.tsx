@@ -10,7 +10,7 @@ import type { ProductFilters } from '@/types/api'
 import type { Category, Product } from '@/types/domain'
 import { getErrorMessage } from '@/utils/error'
 import { formatCurrency, formatUnitLabel } from '@/utils/format'
-import { isGeneratedMediaSource, resolveProductImage } from '@/utils/media'
+import { isGeneratedMediaSource, resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
 
 import styles from '@/pages/SellerPage.module.scss'
 
@@ -491,7 +491,12 @@ export const SellerProductsPage = () => {
             ) : (
               items.map((product) => (
                 <article key={product.id} className={styles.listCard}>
-                  <img className={styles.mediaThumb} src={resolveProductImage(product)} alt={product.title} />
+                  <img
+                    className={styles.mediaThumb}
+                    src={resolveProductImage(product)}
+                    alt={product.title}
+                    onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(product))}
+                  />
                   <div className={styles.listHeader}>
                     <div>
                       <h3>{product.title}</h3>

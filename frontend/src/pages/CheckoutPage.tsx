@@ -8,7 +8,7 @@ import { fetchCartThunk } from '@/store/slices/cartSlice'
 import { checkoutThunk, fetchOrdersThunk } from '@/store/slices/ordersSlice'
 import { fetchPlacesThunk } from '@/store/slices/placesSlice'
 import { formatCurrency } from '@/utils/format'
-import { resolveCartItemImage } from '@/utils/media'
+import { resolveCartItemImage, resolveCartItemImageFallback, swapImageToFallback } from '@/utils/media'
 
 import styles from '@/pages/CheckoutPage.module.scss'
 
@@ -156,7 +156,11 @@ export const CheckoutPage = () => {
               <ul className={styles.orderList}>
                 {cart.items.map((item) => (
                   <li key={item.id} className={styles.orderItem}>
-                    <img src={resolveCartItemImage(item)} alt={item.title} />
+                    <img
+                      src={resolveCartItemImage(item)}
+                      alt={item.title}
+                      onError={(event) => swapImageToFallback(event.currentTarget, resolveCartItemImageFallback(item))}
+                    />
                     <div className={styles.orderCopy}>
                       <strong>{item.title}</strong>
                       <span>

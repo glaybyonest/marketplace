@@ -1,4 +1,4 @@
-# Marketplace Backend
+# Marketplace
 
 Go-бэкенд универсального маркетплейса с frontend на React/Vite в том же репозитории.
 

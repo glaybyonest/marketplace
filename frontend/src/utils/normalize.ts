@@ -131,6 +131,7 @@ export const normalizeProduct = (input: unknown): Product => {
     categoryName: pickString(source.categoryName, pickString(source.category_name)),
     sellerId: pickString(source.seller_id, pickString(source.sellerId)),
     stock: pickNumber(source.stock_qty, pickNumber(source.stock, 0)),
+    reviewsCount: pickNumber(source.reviews_count, pickNumber(source.reviewsCount, 0)),
     isPublished: source.isPublished === undefined ? Boolean(source.is_active ?? true) : Boolean(source.isPublished),
     isActive: source.is_active === undefined ? true : Boolean(source.is_active),
   }
@@ -167,12 +168,12 @@ export const normalizeReview = (input: unknown): Review => {
   const source = asRecord(input)
   return {
     id: pickString(source.id, pickString(source._id, createId())),
-    productId: pickString(source.productId),
-    userId: pickString(source.userId),
-    userName: pickString(source.userName, pickString(source.authorName, 'Buyer')),
+    productId: pickString(source.product_id, pickString(source.productId)),
+    userId: pickString(source.user_id, pickString(source.userId)),
+    userName: pickString(source.user_name, pickString(source.userName, pickString(source.author_name, pickString(source.authorName, 'Buyer')))),
     rating: pickNumber(source.rating),
     comment: pickString(source.comment, pickString(source.text)),
-    createdAt: pickString(source.createdAt, new Date().toISOString()),
+    createdAt: pickString(source.created_at, pickString(source.createdAt, new Date().toISOString())),
   }
 }
 

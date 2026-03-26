@@ -26,6 +26,9 @@ docs/
 *_report*.docx
 _gen_report.ps1
 _generate_backend_report.ps1
+qa-artifacts/
+scripts/__pycache__/
+frontend/vite-dev.log
 
 # IDE / OS
 .vscode/

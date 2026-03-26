@@ -53,6 +53,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	errorEventRepo := postgres.NewErrorEventRepository(db)
 	categoryRepo := postgres.NewCategoryRepository(db)
 	productRepo := postgres.NewProductRepository(db)
+	reviewRepo := postgres.NewProductReviewRepository(db)
 	cartRepo := postgres.NewCartRepository(db)
 	favoriteRepo := postgres.NewFavoriteRepository(db)
 	orderRepo := postgres.NewOrderRepository(db)
@@ -106,7 +107,7 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		cfg.Env != "production",
 	)
 	adminService := usecase.NewAdminService(categoryRepo, productRepo, auditLogger)
-	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo)
+	catalogService := usecase.NewCatalogService(categoryRepo, productRepo, eventRepo, reviewRepo)
 	cartService := usecase.NewCartService(cartRepo, productRepo)
 	ordersService := usecase.NewOrdersService(orderRepo, placeRepo)
 	profileService := usecase.NewProfileService(userRepo, auditLogger)

@@ -10,7 +10,7 @@ import type { ProductFilters } from '@/types/api'
 import type { Category, Product } from '@/types/domain'
 import { getErrorMessage } from '@/utils/error'
 import { formatCurrency, formatUnitLabel } from '@/utils/format'
-import { isGeneratedMediaSource, resolveProductImage } from '@/utils/media'
+import { isGeneratedMediaSource, resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
 
 import styles from '@/pages/AdminPage.module.scss'
 
@@ -505,6 +505,7 @@ export const AdminProductsPage = () => {
                       className={styles.imageThumb}
                       src={resolveProductImage(product)}
                       alt={product.title}
+                      onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(product))}
                     />
                     <div className={styles.stack}>
                       <div className={styles.listHeader}>

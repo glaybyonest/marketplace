@@ -6,7 +6,7 @@ import { ErrorMessage } from '@/components/common/ErrorMessage'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { fetchFavoritesThunk, removeFavoriteThunk } from '@/store/slices/favoritesSlice'
 import { formatCurrency } from '@/utils/format'
-import { resolveProductImage } from '@/utils/media'
+import { resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
 import { getProductPath } from '@/utils/productRef'
 
 import styles from '@/pages/FavoritesPage.module.scss'
@@ -53,6 +53,7 @@ export const FavoritesPage = () => {
                   src={resolveProductImage(item)}
                   alt={item.title}
                   className={styles.image}
+                  onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(item))}
                 />
               </Link>
 

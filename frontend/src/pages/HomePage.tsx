@@ -5,9 +5,9 @@ import { useSearchParams } from 'react-router-dom'
 import type { FilterValues } from '@/components/catalog/FilterPanel'
 import { FilterPanel } from '@/components/catalog/FilterPanel'
 import { ProductGrid } from '@/components/catalog/ProductGrid'
+import { ProductInfographic } from '@/components/catalog/ProductInfographic'
 import { CategoryIcon } from '@/components/common/CategoryIcon'
 import { ErrorMessage } from '@/components/common/ErrorMessage'
-import { productService } from '@/services/productService'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { fetchCategoriesThunk } from '@/store/slices/categoriesSlice'
 import { fetchProductsThunk } from '@/store/slices/productsSlice'
@@ -23,7 +23,6 @@ export const HomePage = () => {
   const dispatch = useAppDispatch()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [popularQueries, setPopularQueries] = useState<string[]>([])
   const filtersControlRef = useRef<HTMLDivElement | null>(null)
   const catalogSectionRef = useRef<HTMLDivElement | null>(null)
 
@@ -50,27 +49,6 @@ export const HomePage = () => {
       dispatch(fetchRecommendationsThunk(8))
     }
   }, [auth.isAuthenticated, dispatch])
-
-  useEffect(() => {
-    let cancelled = false
-
-    productService
-      .getPopularSearches(6)
-      .then((items) => {
-        if (!cancelled) {
-          setPopularQueries(items.map((item) => item.query))
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPopularQueries([])
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!filtersOpen) {
@@ -102,16 +80,6 @@ export const HomePage = () => {
     const nextParams = filtersToSearchParams({
       ...filters,
       ...values,
-      page: 1,
-      limit: CATALOG_PAGE_SIZE,
-    })
-    startTransition(() => setSearchParams(nextParams))
-  }
-
-  const handleSearch = (query: string) => {
-    const nextParams = filtersToSearchParams({
-      ...filters,
-      q: query || undefined,
       page: 1,
       limit: CATALOG_PAGE_SIZE,
     })
@@ -272,6 +240,10 @@ export const HomePage = () => {
         </>
       ) : null}
 
+      {productsState.items.length > 0 ? (
+        <ProductInfographic products={productsState.items} total={productsState.total} />
+      ) : null}
+
       <div className={styles.heading} ref={catalogSectionRef}>
         <div>
           <span className={styles.sectionKicker}>Каталог</span>
@@ -303,19 +275,6 @@ export const HomePage = () => {
 
       <div className={styles.layout}>
         <section className={styles.catalog}>
-          {popularQueries.length > 0 ? (
-            <div className={styles.popularStrip}>
-              <span>Популярно:</span>
-              <div className={styles.popularList}>
-                {popularQueries.map((query) => (
-                  <button key={query} type="button" className={styles.popularItem} onClick={() => handleSearch(query)}>
-                    {query}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {productsState.status === 'loading' ? (
             <div className={styles.loading}>
               <div className={styles.loader} />

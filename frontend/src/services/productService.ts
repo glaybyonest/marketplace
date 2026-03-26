@@ -1,9 +1,9 @@
 import { apiClient } from '@/services/apiClient'
 import { pickData, toPaginated } from '@/services/serviceUtils'
 import type { PaginatedResponse, ProductFilters } from '@/types/api'
-import type { PopularSearch, Product, SearchSuggestion } from '@/types/domain'
+import type { PopularSearch, Product, Review, SearchSuggestion } from '@/types/domain'
 import { isUUIDLike } from '@/utils/productRef'
-import { normalizeProduct } from '@/utils/normalize'
+import { normalizeProduct, normalizeReview } from '@/utils/normalize'
 
 interface ProductPayload {
   title?: string
@@ -21,6 +21,11 @@ interface ProductPayload {
   unit?: string
   specs?: Product['specs']
   isActive?: boolean
+}
+
+interface ProductReviewPayload {
+  rating: number
+  comment: string
 }
 
 const toProductList = (raw: unknown): PaginatedResponse<Product> => {
@@ -151,6 +156,20 @@ export const productService = {
 
   async getProductBySlug(slug: string): Promise<Product> {
     return productService.getProduct(slug)
+  },
+
+  async getProductReviews(productId: string, limit = 20): Promise<Review[]> {
+    const response = await apiClient.get(`/v1/products/${productId}/reviews`, { params: { limit } })
+    const items = pickData<unknown[]>(response.data) ?? []
+    return Array.isArray(items) ? items.map(normalizeReview) : []
+  },
+
+  async createProductReview(productId: string, payload: ProductReviewPayload): Promise<Review> {
+    const response = await apiClient.post(`/v1/products/${productId}/reviews`, {
+      rating: payload.rating,
+      comment: payload.comment,
+    })
+    return normalizeReview(pickData(response.data))
   },
 
   async getAdminProducts(filters: ProductFilters = {}): Promise<PaginatedResponse<Product>> {
