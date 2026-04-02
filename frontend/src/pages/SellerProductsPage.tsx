@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { AppLoader } from '@/components/common/AppLoader'
@@ -31,7 +31,17 @@ interface ProductFormState {
   isActive: boolean
 }
 
-const initialFilters: ProductFilters = { page: 1, limit: 18, sort: 'new' }
+const SELLER_PRODUCTS_BATCH_SIZE = 100
+
+const initialFilters: ProductFilters = { sort: 'new' }
+
+const shouldSyncSellerCategoryIds = (filters: ProductFilters) => {
+  const query = (filters.q ?? filters.query ?? '').trim()
+  const categoryId = filters.category_id ?? filters.category
+  const isActive = filters.is_active ?? filters.isActive
+
+  return !query && !categoryId && typeof isActive !== 'boolean'
+}
 
 const createInitialFormState = (): ProductFormState => ({
   name: '',
@@ -69,32 +79,55 @@ const productToFormState = (product: Product): ProductFormState => ({
 
 export const SellerProductsPage = () => {
   const [categories, setCategories] = useState<Category[]>([])
+  const [sellerCategoryIds, setSellerCategoryIds] = useState<string[]>([])
   const [items, setItems] = useState<Product[]>([])
   const [filters, setFilters] = useState<ProductFilters>(initialFilters)
   const [searchDraft, setSearchDraft] = useState('')
+  const [categoryDraft, setCategoryDraft] = useState('')
+  const [statusDraft, setStatusDraft] = useState<'all' | 'visible' | 'hidden'>('all')
+  const [catalogRequested, setCatalogRequested] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formState, setFormState] = useState<ProductFormState>(createInitialFormState())
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
-  const initializedRef = useRef(false)
 
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories])
+  const sellerFilterCategories = useMemo(() => {
+    const allowedIds = new Set(sellerCategoryIds)
+    return categories.filter((category) => allowedIds.has(category.id))
+  }, [categories, sellerCategoryIds])
 
   const loadProducts = useCallback(async (nextFilters: ProductFilters) => {
     setLoading(true)
     setError(null)
     try {
-      const response = await sellerService.getProducts(nextFilters)
-      setItems(response.items)
-      setPage(response.page)
-      setTotalPages(response.totalPages)
-      setTotal(response.total)
-      setStockDrafts(Object.fromEntries(response.items.map((product) => [product.id, String(product.stock ?? 0)])))
+      const baseFilters = {
+        ...nextFilters,
+        page: 1,
+        limit: SELLER_PRODUCTS_BATCH_SIZE,
+      }
+
+      const firstResponse = await sellerService.getProducts(baseFilters)
+      const allItems = [...firstResponse.items]
+
+      for (let nextPage = 2; nextPage <= firstResponse.totalPages; nextPage += 1) {
+        const pageResponse = await sellerService.getProducts({
+          ...baseFilters,
+          page: nextPage,
+        })
+        allItems.push(...pageResponse.items)
+      }
+
+      if (shouldSyncSellerCategoryIds(nextFilters)) {
+        setSellerCategoryIds([...new Set(allItems.map((product) => product.categoryId).filter(Boolean))])
+      }
+
+      setItems(allItems)
+      setTotal(firstResponse.total)
+      setStockDrafts(Object.fromEntries(allItems.map((product) => [product.id, String(product.stock ?? 0)])))
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Не удалось загрузить товары магазина'))
     } finally {
@@ -118,14 +151,6 @@ export const SellerProductsPage = () => {
 
     void loadInitial()
   }, [loadCategories, loadProducts])
-
-  useEffect(() => {
-    if (!initializedRef.current) {
-      initializedRef.current = true
-      return
-    }
-    void loadProducts(filters)
-  }, [filters, loadProducts])
 
   const resetForm = () => {
     setEditingProduct(null)
@@ -249,12 +274,25 @@ export const SellerProductsPage = () => {
     }
   }
 
-  const applyFilters = (nextFilters: Partial<ProductFilters>) => {
-    setFilters((current) => ({
-      ...current,
-      ...nextFilters,
-      page: nextFilters.page ?? 1,
-    }))
+  const submitCatalogFilters = () => {
+    const nextFilters: ProductFilters = {
+      ...initialFilters,
+      q: searchDraft.trim() || undefined,
+      category_id: categoryDraft || undefined,
+      is_active: statusDraft === 'all' ? undefined : statusDraft === 'visible',
+    }
+
+    setCatalogRequested(true)
+    setFilters(nextFilters)
+    void loadProducts(nextFilters)
+  }
+
+  const resetFilters = () => {
+    setSearchDraft('')
+    setCategoryDraft('')
+    setStatusDraft('all')
+    setCatalogRequested(false)
+    setFilters({ ...initialFilters })
   }
 
   return (
@@ -439,17 +477,17 @@ export const SellerProductsPage = () => {
         </section>
 
         <section className={styles.panel}>
-          <div className={styles.toolbar}>
-            <div>
+          <div className={`${styles.toolbar} ${styles.catalogToolbar}`}>
+            <div className={styles.catalogToolbarHeading}>
               <span className="badge-pill">Каталог магазина</span>
               <h2>Текущие товары</h2>
-              <p>Найдено: {total}</p>
+              <p>{catalogRequested ? `Найдено: ${total}` : 'Выберите фильтры или нажмите «Применить», чтобы открыть товары.'}</p>
             </div>
             <form
-              className={styles.toolbarFilters}
+              className={`${styles.toolbarFilters} ${styles.catalogToolbarFilters}`}
               onSubmit={(event) => {
                 event.preventDefault()
-                applyFilters({ q: searchDraft || undefined })
+                submitCatalogFilters()
               }}
             >
               <input
@@ -457,129 +495,128 @@ export const SellerProductsPage = () => {
                 onChange={(event) => setSearchDraft(event.target.value)}
                 placeholder="Поиск по названию, артикулу или бренду"
               />
-              <select value={filters.category_id ?? ''} onChange={(event) => applyFilters({ category_id: event.target.value || undefined })}>
-                <option value="">Все категории</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={filters.is_active === undefined ? 'all' : filters.is_active ? 'visible' : 'hidden'}
-                onChange={(event) => {
-                  const value = event.target.value
-                  applyFilters({ is_active: value === 'all' ? undefined : value === 'visible' })
-                }}
-              >
-                <option value="all">Все статусы</option>
-                <option value="visible">В продаже</option>
-                <option value="hidden">Скрытые</option>
-              </select>
-              <button type="submit" className="action-secondary">
-                Применить
-              </button>
+              <div className={styles.catalogToolbarControlGrid}>
+                <select
+                  value={categoryDraft}
+                  onChange={(event) => setCategoryDraft(event.target.value)}
+                >
+                  <option value="">Все категории</option>
+                  {sellerFilterCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={statusDraft}
+                  onChange={(event) => setStatusDraft(event.target.value as 'all' | 'visible' | 'hidden')}
+                >
+                  <option value="all">Все статусы</option>
+                  <option value="visible">В продаже</option>
+                  <option value="hidden">Скрытые</option>
+                </select>
+                <button type="submit" className={`action-secondary ${styles.catalogToolbarButton}`}>
+                  Применить
+                </button>
+                <button type="button" className={`action-ghost ${styles.catalogToolbarButton}`} onClick={resetFilters}>
+                  Сбросить
+                </button>
+              </div>
             </form>
           </div>
 
           <div className={styles.list}>
-            {items.length === 0 && !loading ? (
+            {!catalogRequested ? (
+              null
+            ) : items.length === 0 && !loading ? (
               <div className="empty-state">
                 <h2>Товары не найдены</h2>
                 <p>Добавьте первую карточку или ослабьте фильтры каталога.</p>
               </div>
             ) : (
               items.map((product) => (
-                <article key={product.id} className={styles.listCard}>
+                <article key={product.id} className={`${styles.listCard} ${styles.productListCard}`}>
                   <img
-                    className={styles.mediaThumb}
+                    className={`${styles.mediaThumb} ${styles.productThumb}`}
                     src={resolveProductImage(product)}
                     alt={product.title}
                     onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(product))}
                   />
-                  <div className={styles.listHeader}>
-                    <div>
-                      <h3>{product.title}</h3>
-                      <p className={styles.listMeta}>
-                        {categoryMap.get(product.categoryId) ?? 'Категория'} • Артикул {product.sku ?? '-'} •{' '}
-                        {formatCurrency(product.price, product.currency)}
-                        {product.unit ? ` • ${formatUnitLabel(product.unit)}` : ''}
-                      </p>
+                  <div className={styles.productCardBody}>
+                    <div className={styles.productCardTop}>
+                      <div className={styles.productCardTitleBlock}>
+                        <h3>{product.title}</h3>
+                        <p className={styles.listMeta}>
+                          {categoryMap.get(product.categoryId) ?? 'Категория'} • Артикул {product.sku ?? '-'}
+                        </p>
+                      </div>
+                      <div className={styles.productCardAside}>
+                        <strong className={styles.productPrice}>{formatCurrency(product.price, product.currency)}</strong>
+                        {product.unit ? <span className={styles.productUnit}>{formatUnitLabel(product.unit)}</span> : null}
+                        <div className={styles.badgeRow}>
+                          <span className={product.isActive ? styles.badge : styles.badgeDanger}>
+                            {product.isActive ? 'В продаже' : 'Скрыт'}
+                          </span>
+                          <span className={(product.stock ?? 0) <= 10 ? styles.badgeWarn : styles.badgeMuted}>
+                            Остаток: {product.stock ?? 0}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className={styles.badgeRow}>
-                      <span className={product.isActive ? styles.badge : styles.badgeDanger}>
-                        {product.isActive ? 'В продаже' : 'Скрыт'}
-                      </span>
-                      <span className={(product.stock ?? 0) <= 10 ? styles.badgeWarn : styles.badgeMuted}>
-                        Остаток: {product.stock ?? 0}
-                      </span>
+
+                    {product.description ? <p className={styles.productDescription}>{product.description}</p> : null}
+
+                    <div className={styles.productCardFooter}>
+                      <div className={styles.inlineActions}>
+                        <button type="button" className={styles.inlineButton} onClick={() => handleEdit(product)}>
+                          Изменить
+                        </button>
+                        <button type="button" className={styles.inlineButton} onClick={() => handleToggleActive(product)} disabled={submitting}>
+                          {product.isActive ? 'Скрыть' : 'Вернуть'}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.inlineButton} ${styles.inlineButtonDanger}`}
+                          onClick={() => handleArchive(product)}
+                          disabled={submitting}
+                        >
+                          Убрать с витрины
+                        </button>
+                      </div>
+
+                      <form
+                        className={styles.stockForm}
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          void handleStockSave(product)
+                        }}
+                      >
+                        <label className={styles.stockField}>
+                          <span>Остаток</span>
+                          <input
+                            className={styles.stockInput}
+                            type="number"
+                            min="0"
+                            value={stockDrafts[product.id] ?? String(product.stock ?? 0)}
+                            onChange={(event) =>
+                              setStockDrafts((current) => ({
+                                ...current,
+                                [product.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button type="submit" className="action-secondary" disabled={submitting}>
+                          Сохранить
+                        </button>
+                      </form>
                     </div>
                   </div>
-
-                  {product.description ? <p className={styles.listMeta}>{product.description}</p> : null}
-
-                  <div className={styles.inlineActions}>
-                    <button type="button" className={styles.inlineButton} onClick={() => handleEdit(product)}>
-                      Изменить
-                    </button>
-                    <button type="button" className={styles.inlineButton} onClick={() => handleToggleActive(product)} disabled={submitting}>
-                      {product.isActive ? 'Скрыть' : 'Вернуть'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.inlineButton} ${styles.inlineButtonDanger}`}
-                      onClick={() => handleArchive(product)}
-                      disabled={submitting}
-                    >
-                      Убрать с витрины
-                    </button>
-                  </div>
-
-                  <form
-                    className={styles.toolbarFilters}
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void handleStockSave(product)
-                    }}
-                  >
-                    <input
-                      type="number"
-                      min="0"
-                      value={stockDrafts[product.id] ?? String(product.stock ?? 0)}
-                      onChange={(event) =>
-                        setStockDrafts((current) => ({
-                          ...current,
-                          [product.id]: event.target.value,
-                        }))
-                      }
-                    />
-                    <button type="submit" className="action-secondary" disabled={submitting}>
-                      Сохранить остаток
-                    </button>
-                  </form>
                 </article>
               ))
             )}
           </div>
 
-          {totalPages > 1 ? (
-            <div className={styles.pagination}>
-              <button type="button" className="action-secondary" disabled={page <= 1} onClick={() => applyFilters({ page: page - 1 })}>
-                Назад
-              </button>
-              <span className={styles.helper}>
-                Страница {page} из {totalPages}
-              </span>
-              <button
-                type="button"
-                className="action-secondary"
-                disabled={page >= totalPages}
-                onClick={() => applyFilters({ page: page + 1 })}
-              >
-                Дальше
-              </button>
-            </div>
-          ) : null}
         </section>
       </div>
     </div>

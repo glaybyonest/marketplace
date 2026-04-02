@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { AppLoader } from '@/components/common/AppLoader'
@@ -7,7 +7,7 @@ import { SellerNav } from '@/components/seller/SellerNav'
 import { sellerService } from '@/services/sellerService'
 import type { SellerProfile, SellerStatus } from '@/types/domain'
 import { getErrorMessage } from '@/utils/error'
-import { isGeneratedMediaSource, resolveSellerBanner, resolveSellerLogo } from '@/utils/media'
+import { isGeneratedMediaSource } from '@/utils/media'
 
 import styles from '@/pages/SellerPage.module.scss'
 
@@ -69,32 +69,6 @@ export const SellerStorefrontPage = () => {
       cancelled = true
     }
   }, [])
-
-  const previewTitle = formState.storeName.trim() || 'Ваш магазин'
-  const previewBanner = resolveSellerBanner({
-    storeSlug: formState.storeSlug || profile?.storeSlug || previewTitle,
-    storeName: previewTitle,
-    description: formState.description || undefined,
-    city: formState.city || undefined,
-    status: formState.status,
-    bannerUrl: formState.bannerUrl.trim() || undefined,
-  })
-  const previewLogo = resolveSellerLogo({
-    storeSlug: formState.storeSlug || profile?.storeSlug || previewTitle,
-    storeName: previewTitle,
-    city: formState.city || undefined,
-    status: formState.status,
-    logoUrl: formState.logoUrl.trim() || undefined,
-  })
-
-  const previewPills = useMemo(
-    () => [
-      statusLabels[formState.status],
-      formState.city.trim() || 'Онлайн-магазин',
-      formState.supportEmail.trim() || formState.supportPhone.trim() || 'Контакты обновите в профиле',
-    ],
-    [formState.city, formState.status, formState.supportEmail, formState.supportPhone],
-  )
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -161,145 +135,104 @@ export const SellerStorefrontPage = () => {
       {notice ? <div className="page-card">{notice}</div> : null}
       {error ? <ErrorMessage message={error} /> : null}
 
-      <div className={styles.contentGrid}>
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Редактирование</span>
-              <h2>Параметры магазина</h2>
-              <p>Эти данные формируют профиль продавца и используются во всех разделах кабинета магазина.</p>
-            </div>
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <div>
+            <span className="badge-pill">Редактирование</span>
+            <h2>Параметры магазина</h2>
+            <p>Эти данные формируют профиль продавца и используются во всех разделах кабинета магазина.</p>
+          </div>
+        </div>
+
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
+              Название магазина
+              <input
+                value={formState.storeName}
+                onChange={(event) => setFormState((current) => ({ ...current, storeName: event.target.value }))}
+                required
+              />
+            </label>
+            <label className={styles.field}>
+              Slug
+              <input
+                value={formState.storeSlug}
+                onChange={(event) => setFormState((current) => ({ ...current, storeSlug: event.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              Юридическое название
+              <input
+                value={formState.legalName}
+                onChange={(event) => setFormState((current) => ({ ...current, legalName: event.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              Город
+              <input
+                value={formState.city}
+                onChange={(event) => setFormState((current) => ({ ...current, city: event.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              Email поддержки
+              <input
+                type="email"
+                value={formState.supportEmail}
+                onChange={(event) => setFormState((current) => ({ ...current, supportEmail: event.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              Телефон поддержки
+              <input
+                value={formState.supportPhone}
+                onChange={(event) => setFormState((current) => ({ ...current, supportPhone: event.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              Логотип
+              <input
+                value={formState.logoUrl}
+                onChange={(event) => setFormState((current) => ({ ...current, logoUrl: event.target.value }))}
+                placeholder="Оставьте пустым для автоматического логотипа"
+              />
+            </label>
+            <label className={styles.field}>
+              Баннер
+              <input
+                value={formState.bannerUrl}
+                onChange={(event) => setFormState((current) => ({ ...current, bannerUrl: event.target.value }))}
+                placeholder="Оставьте пустым для локального баннера магазина"
+              />
+            </label>
+            <label className={styles.field}>
+              Статус магазина
+              <select
+                value={formState.status}
+                onChange={(event) => setFormState((current) => ({ ...current, status: event.target.value as SellerStatus }))}
+              >
+                <option value="active">Активен</option>
+                <option value="paused">На паузе</option>
+                <option value="pending">На проверке</option>
+              </select>
+            </label>
+            <label className={`${styles.field} ${styles.fullWidth}`}>
+              Описание
+              <textarea
+                value={formState.description}
+                onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))}
+              />
+            </label>
           </div>
 
-          <form className={styles.form} onSubmit={handleSubmit}>
-            <div className={styles.formGrid}>
-              <label className={styles.field}>
-                Название магазина
-                <input
-                  value={formState.storeName}
-                  onChange={(event) => setFormState((current) => ({ ...current, storeName: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className={styles.field}>
-                Slug
-                <input
-                  value={formState.storeSlug}
-                  onChange={(event) => setFormState((current) => ({ ...current, storeSlug: event.target.value }))}
-                />
-              </label>
-              <label className={styles.field}>
-                Юридическое название
-                <input
-                  value={formState.legalName}
-                  onChange={(event) => setFormState((current) => ({ ...current, legalName: event.target.value }))}
-                />
-              </label>
-              <label className={styles.field}>
-                Город
-                <input
-                  value={formState.city}
-                  onChange={(event) => setFormState((current) => ({ ...current, city: event.target.value }))}
-                />
-              </label>
-              <label className={styles.field}>
-                Email поддержки
-                <input
-                  type="email"
-                  value={formState.supportEmail}
-                  onChange={(event) => setFormState((current) => ({ ...current, supportEmail: event.target.value }))}
-                />
-              </label>
-              <label className={styles.field}>
-                Телефон поддержки
-                <input
-                  value={formState.supportPhone}
-                  onChange={(event) => setFormState((current) => ({ ...current, supportPhone: event.target.value }))}
-                />
-              </label>
-              <label className={styles.field}>
-                Логотип
-                  <input
-                    value={formState.logoUrl}
-                    onChange={(event) => setFormState((current) => ({ ...current, logoUrl: event.target.value }))}
-                    placeholder="Оставьте пустым для автоматического логотипа"
-                  />
-                </label>
-              <label className={styles.field}>
-                Баннер
-                  <input
-                    value={formState.bannerUrl}
-                    onChange={(event) => setFormState((current) => ({ ...current, bannerUrl: event.target.value }))}
-                    placeholder="Оставьте пустым для локального баннера магазина"
-                  />
-                </label>
-              <label className={styles.field}>
-                Статус магазина
-                <select
-                  value={formState.status}
-                  onChange={(event) => setFormState((current) => ({ ...current, status: event.target.value as SellerStatus }))}
-                >
-                  <option value="active">Активен</option>
-                  <option value="paused">На паузе</option>
-                  <option value="pending">На проверке</option>
-                </select>
-              </label>
-              <label className={`${styles.field} ${styles.fullWidth}`}>
-                Описание
-                <textarea
-                  value={formState.description}
-                  onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))}
-                />
-              </label>
-            </div>
-
-            <div className={styles.inlineActions}>
-              <button type="submit" className="action-primary" disabled={submitStatus === 'loading'}>
-                {submitStatus === 'loading' ? 'Сохраняем...' : 'Сохранить магазин'}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <aside className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Превью</span>
-              <h2>Превью витрины</h2>
-            </div>
+          <div className={styles.inlineActions}>
+            <button type="submit" className="action-primary" disabled={submitStatus === 'loading'}>
+              {submitStatus === 'loading' ? 'Сохраняем...' : 'Сохранить магазин'}
+            </button>
           </div>
-
-          <div className={styles.previewCard}>
-            <div
-              className={styles.previewBanner}
-              style={{
-                backgroundImage: `linear-gradient(rgb(15 71 61 / 0.46), rgb(15 71 61 / 0.56)), url("${previewBanner}")`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <div className={styles.previewIdentity}>
-                <img src={previewLogo} alt={previewTitle} className={styles.previewLogo} />
-                <div>
-                  <h3>{previewTitle}</h3>
-                  <p>{formState.city.trim() || 'Город продавца'}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.previewStats}>
-              <p>{formState.description.trim() || 'Опишите специализацию магазина, географию доставки и сильные стороны сервиса.'}</p>
-              <div className={styles.previewPills}>
-                {previewPills.map((pill) => (
-                  <span key={pill} className={styles.pill}>
-                    {pill}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
+        </form>
+      </section>
     </div>
   )
 }

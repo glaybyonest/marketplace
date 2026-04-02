@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom'
 import type { FilterValues } from '@/components/catalog/FilterPanel'
 import { FilterPanel } from '@/components/catalog/FilterPanel'
 import { ProductGrid } from '@/components/catalog/ProductGrid'
-import { ProductInfographic } from '@/components/catalog/ProductInfographic'
 import { CategoryIcon } from '@/components/common/CategoryIcon'
 import { ErrorMessage } from '@/components/common/ErrorMessage'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
@@ -238,10 +237,6 @@ export const HomePage = () => {
           ) : null}
 
         </>
-      ) : null}
-
-      {productsState.items.length > 0 ? (
-        <ProductInfographic products={productsState.items} total={productsState.total} />
       ) : null}
 
       <div className={styles.heading} ref={catalogSectionRef}>

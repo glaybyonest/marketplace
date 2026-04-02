@@ -1393,12 +1393,11 @@ export const createManagedSellerLogoRef = (storeSlug: string) => `${MANAGED_MEDI
 export const createManagedSellerBannerRef = (storeSlug: string) => `${MANAGED_MEDIA_PROTOCOL}seller/${storeSlug}/banner`
 
 export const resolveMediaUrl = (value: string | undefined, options: MediaOptions = {}) => {
-  if (value && !shouldUseManagedMedia(value)) {
-    return value
-  }
-
   const parsed = value ? parseManagedMediaRef(value) : null
   const kind = parsed?.kind ?? options.kind ?? 'product'
+  if (value && !shouldUseManagedMedia(value) && !(kind === 'product' && options.renderMode === 'illustration')) {
+    return value
+  }
   const seed = parsed?.seed ?? options.seed ?? 'marketplace'
   const variant = parsed?.variant ?? 'hero'
   const title = options.title?.trim() || (kind === 'product' ? 'Товар каталога' : 'Магазин продавца')
@@ -1450,6 +1449,7 @@ export const resolveProductImage = (
     currency: product.currency,
     stock: product.stock,
     sku: product.sku,
+    renderMode: 'illustration',
   })
 }
 
@@ -1484,6 +1484,7 @@ export const resolveCartItemImage = (
     currency: item.currency,
     stock: item.stock,
     sku: item.sku,
+    renderMode: 'illustration',
   })
 
 export const resolveCartItemImageFallback = (

@@ -89,7 +89,7 @@ export const SellerOrdersPage = () => {
                   </div>
                   <div className={styles.badgeRow}>
                     <span className={styles.badgeMuted}>{order.itemsCount} поз.</span>
-                    <span className={styles.badge}>{formatCurrency(order.grossRevenue, order.currency)}</span>
+                    <span className={styles.badgePrice}>{formatCurrency(order.grossRevenue, order.currency)}</span>
                   </div>
                 </div>
                 <p className={styles.listMeta}>{order.placeTitle || 'Адрес покупателя'}</p>

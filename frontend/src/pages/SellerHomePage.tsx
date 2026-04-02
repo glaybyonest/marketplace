@@ -11,7 +11,7 @@ import { fetchProfileThunk } from '@/store/slices/userSlice'
 import type { SellerDashboard } from '@/types/domain'
 import { getErrorMessage } from '@/utils/error'
 import { formatCurrency, formatDate } from '@/utils/format'
-import { resolveProductImage, resolveProductImageFallback, resolveSellerBanner, resolveSellerLogo, swapImageToFallback } from '@/utils/media'
+import { resolveSellerBanner, resolveSellerLogo } from '@/utils/media'
 
 import styles from '@/pages/SellerPage.module.scss'
 
@@ -99,25 +99,6 @@ export const SellerHomePage = () => {
     city: formState.city || undefined,
     status: 'active',
   })
-  const dashboardLogo = dashboard
-    ? resolveSellerLogo({
-        storeSlug: dashboard.profile.storeSlug,
-        storeName: dashboard.profile.storeName,
-        city: dashboard.profile.city,
-        status: dashboard.profile.status,
-        logoUrl: dashboard.profile.logoUrl,
-      })
-    : ''
-  const dashboardBanner = dashboard
-    ? resolveSellerBanner({
-        storeSlug: dashboard.profile.storeSlug,
-        storeName: dashboard.profile.storeName,
-        description: dashboard.profile.description,
-        city: dashboard.profile.city,
-        status: dashboard.profile.status,
-        bannerUrl: dashboard.profile.bannerUrl,
-      })
-    : ''
 
   const metricCards = useMemo(() => {
     if (!dashboard) {
@@ -396,143 +377,6 @@ export const SellerHomePage = () => {
         ))}
       </section>
 
-      <div className={styles.contentGrid}>
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Быстрые действия</span>
-              <h2>Что важно сегодня</h2>
-              <p>Кабинет продавца связан с реальными товарами и реальными заказами магазина.</p>
-            </div>
-          </div>
-
-          <div className={styles.actionGrid}>
-            <Link to="/seller/products" className={styles.actionCard}>
-              <strong>Добавить товар</strong>
-              <p>Откройте форму, соберите карточку и сразу задайте цену, остаток и видимость.</p>
-            </Link>
-            <Link to="/seller/orders" className={styles.actionCard}>
-              <strong>Проверить заказы</strong>
-              <p>Посмотрите последние заказы продавца и сверьте выручку по своей части корзины.</p>
-            </Link>
-            <Link to="/seller/storefront" className={styles.actionCard}>
-              <strong>Обновить витрину</strong>
-              <p>Подтяните описание магазина, контакты и статус, чтобы профиль всегда оставался актуальным.</p>
-            </Link>
-          </div>
-
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Ассортимент</span>
-              <h2>Свежие карточки магазина</h2>
-            </div>
-            <Link to="/seller/products" className="action-secondary">
-              Все товары
-            </Link>
-          </div>
-
-          <div className={styles.list}>
-            {dashboard.recentProducts.length === 0 ? (
-              <div className="empty-state">
-                <h2>Пока нет товаров</h2>
-                <p>Добавьте первую карточку, чтобы магазин появился в рабочем ритме.</p>
-              </div>
-            ) : (
-              dashboard.recentProducts.map((product) => (
-                <article key={product.id} className={styles.listCard}>
-                  <img
-                    className={styles.mediaThumb}
-                    src={resolveProductImage(product)}
-                    alt={product.title}
-                    onError={(event) => swapImageToFallback(event.currentTarget, resolveProductImageFallback(product))}
-                  />
-                  <div className={styles.listHeader}>
-                    <div>
-                      <h3>{product.title}</h3>
-                      <p className={styles.listMeta}>
-                        {product.categoryName || 'Каталог'} • {formatCurrency(product.price, product.currency)}
-                      </p>
-                    </div>
-                    <div className={styles.badgeRow}>
-                      <span className={product.isActive ? styles.badge : styles.badgeDanger}>
-                        {product.isActive ? 'В продаже' : 'Скрыт'}
-                      </span>
-                      <span className={styles.badgeMuted}>Остаток: {product.stock ?? 0}</span>
-                    </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-
-        <aside className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Магазин</span>
-              <h2>Ваша витрина</h2>
-              <p>Превью магазина и текущие сигналы по остаткам.</p>
-            </div>
-          </div>
-
-          <div className={styles.previewCard}>
-            <div
-              className={styles.previewBanner}
-              style={{
-                backgroundImage: `linear-gradient(rgb(15 71 61 / 0.46), rgb(15 71 61 / 0.56)), url("${dashboardBanner}")`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <div className={styles.previewIdentity}>
-                <img src={dashboardLogo} alt={dashboard.profile.storeName} className={styles.previewLogo} />
-                <div>
-                  <h3>{dashboard.profile.storeName}</h3>
-                  <p>{dashboard.profile.city || 'Онлайн-магазин'}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.previewStats}>
-              <p>{dashboard.profile.description || 'Добавьте описание магазина, чтобы рассказать о специализации и уровне сервиса.'}</p>
-              <div className={styles.previewPills}>
-                <span className={styles.pill}>{statusLabels[dashboard.profile.status]}</span>
-                <span className={styles.pill}>{dashboard.metrics.activeProducts} активных карточек</span>
-                <span className={styles.pill}>{dashboard.metrics.lowStockProducts} позиций требуют пополнения</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.panelHeader}>
-            <div>
-              <span className="badge-pill">Остатки</span>
-              <h2>Нужно пополнить</h2>
-            </div>
-          </div>
-
-          <div className={styles.list}>
-            {dashboard.lowStock.length === 0 ? (
-              <div className="empty-state">
-                <h2>Низких остатков нет</h2>
-                <p>Самые чувствительные позиции уже под контролем.</p>
-              </div>
-            ) : (
-              dashboard.lowStock.map((product) => (
-                <article key={product.id} className={styles.listCard}>
-                  <div className={styles.listHeader}>
-                    <div>
-                      <h3>{product.title}</h3>
-                      <p className={styles.listMeta}>{product.categoryName || 'Каталог'}</p>
-                    </div>
-                    <span className={styles.badgeWarn}>Осталось: {product.stock ?? 0}</span>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </aside>
-      </div>
-
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <div>
@@ -560,7 +404,7 @@ export const SellerHomePage = () => {
                   </div>
                   <div className={styles.badgeRow}>
                     <span className={styles.badgeMuted}>{order.itemsCount} поз.</span>
-                    <span className={styles.badge}>{formatCurrency(order.grossRevenue, order.currency)}</span>
+                    <span className={styles.badgePrice}>{formatCurrency(order.grossRevenue, order.currency)}</span>
                   </div>
                 </div>
                 <p className={styles.listMeta}>{order.placeTitle || 'Адрес покупателя'}</p>

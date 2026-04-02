@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { RatingStars } from '@/components/common/RatingStars'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { addCartItemThunk } from '@/store/slices/cartSlice'
 import { addFavoriteThunk, removeFavoriteThunk } from '@/store/slices/favoritesSlice'
-import { RatingStars } from '@/components/common/RatingStars'
 import type { Product } from '@/types/domain'
 import { formatCurrency, formatReviewCount } from '@/utils/format'
-import { resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
+import { resolveProductImage } from '@/utils/media'
 import { formatProductSpecLabel, formatProductSpecValue, getProductSpecEntries } from '@/utils/productSpecs'
 import { getProductPath } from '@/utils/productRef'
 
@@ -20,13 +20,11 @@ interface ProductCardProps {
 export const ProductCard = ({ product }: ProductCardProps) => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
-  const [loadedImageSrc, setLoadedImageSrc] = useState('')
+  const [imageLoaded, setImageLoaded] = useState(false)
   const auth = useAppSelector((state) => state.auth)
   const favoriteItems = useAppSelector((state) => state.favorites.items)
   const cartStatus = useAppSelector((state) => state.cart.mutationStatus)
   const image = useMemo(() => resolveProductImage(product), [product])
-  const fallbackImage = useMemo(() => resolveProductImageFallback(product), [product])
-  const imageLoaded = loadedImageSrc === image
 
   const specPreview = useMemo(() => getProductSpecEntries(product.specs, 2), [product.specs])
 
@@ -36,7 +34,6 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   const productPath = getProductPath(product)
   const reviewsCount = product.reviewsCount ?? 0
   const hasReviews = reviewsCount > 0
-
   const sellerLabel = product.sellerName || 'Партнерский магазин'
 
   const handleFavorite = async () => {
@@ -85,11 +82,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
           alt={product.title}
           loading="lazy"
           className={imageLoaded ? styles.imageLoaded : styles.image}
-          onLoad={() => setLoadedImageSrc(image)}
-          onError={(event) => {
-            swapImageToFallback(event.currentTarget, fallbackImage)
-            setLoadedImageSrc(image)
-          }}
+          onLoad={() => setImageLoaded(true)}
         />
       </Link>
 
