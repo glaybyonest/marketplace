@@ -18,6 +18,8 @@ type ProductRepository struct {
 	db *pgxpool.Pool
 }
 
+const productPrimaryImageExpr = "COALESCE(NULLIF(p.gallery->>0, ''), '')"
+
 const productSelectColumns = `
 		p.id,
 		p.category_id,
@@ -31,7 +33,7 @@ const productSelectColumns = `
 		p.price::double precision,
 		p.currency,
 		p.sku,
-		COALESCE(p.image_url, ''),
+		` + productPrimaryImageExpr + `,
 		COALESCE(p.gallery, '[]'::jsonb),
 		COALESCE(p.brand, ''),
 		COALESCE(p.unit, ''),
@@ -311,7 +313,7 @@ func (r *ProductRepository) TrackSearchQuery(ctx context.Context, query string) 
 }
 
 func (r *ProductRepository) Create(ctx context.Context, input usecase.ProductWriteInput) (domain.Product, error) {
-	galleryRaw, specsRaw, err := marshalProductMetadata(input.Gallery, input.Specs)
+	galleryRaw, specsRaw, err := marshalProductMetadata(input.ImageURL, input.Gallery, input.Specs)
 	if err != nil {
 		return domain.Product{}, err
 	}
@@ -327,7 +329,6 @@ func (r *ProductRepository) Create(ctx context.Context, input usecase.ProductWri
 			price,
 			currency,
 			sku,
-			image_url,
 			gallery,
 			brand,
 			unit,
@@ -335,16 +336,16 @@ func (r *ProductRepository) Create(ctx context.Context, input usecase.ProductWri
 			stock_qty,
 			is_active
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13::jsonb, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12::jsonb, $13, $14)
 		RETURNING id
-	`, input.CategoryID, input.SellerID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, input.ImageURL, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive).Scan(&productID); err != nil {
+	`, input.CategoryID, input.SellerID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive).Scan(&productID); err != nil {
 		return domain.Product{}, mapError(err)
 	}
 	return r.GetByIDAny(ctx, productID)
 }
 
 func (r *ProductRepository) Update(ctx context.Context, input usecase.ProductWriteInput) (domain.Product, error) {
-	galleryRaw, specsRaw, err := marshalProductMetadata(input.Gallery, input.Specs)
+	galleryRaw, specsRaw, err := marshalProductMetadata(input.ImageURL, input.Gallery, input.Specs)
 	if err != nil {
 		return domain.Product{}, err
 	}
@@ -361,16 +362,15 @@ func (r *ProductRepository) Update(ctx context.Context, input usecase.ProductWri
 			price = $7,
 			currency = $8,
 			sku = $9,
-			image_url = $10,
-			gallery = $11::jsonb,
-			brand = $12,
-			unit = $13,
-			specs = $14::jsonb,
-			stock_qty = $15,
-			is_active = $16
+			gallery = $10::jsonb,
+			brand = $11,
+			unit = $12,
+			specs = $13::jsonb,
+			stock_qty = $14,
+			is_active = $15
 		WHERE p.id = $1
 		RETURNING p.id
-	`, input.ID, input.CategoryID, input.SellerID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, input.ImageURL, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive).Scan(&productID); err != nil {
+	`, input.ID, input.CategoryID, input.SellerID, input.Name, input.Slug, input.Description, input.Price, input.Currency, input.SKU, galleryRaw, input.Brand, input.Unit, specsRaw, input.StockQty, input.IsActive).Scan(&productID); err != nil {
 		return domain.Product{}, mapError(err)
 	}
 	return r.GetByIDAny(ctx, productID)
@@ -465,11 +465,16 @@ func scanProduct(row pgx.Row, product *domain.Product) error {
 		product.SellerID = nil
 	}
 
-	images, err := decodeProductImages(product.ImageURL, galleryRaw)
+	images, err := decodeProductImages(galleryRaw)
 	if err != nil {
 		return err
 	}
 	product.Images = images
+	if len(images) > 0 {
+		product.ImageURL = images[0]
+	} else {
+		product.ImageURL = ""
+	}
 
 	specs, err := decodeProductSpecs(specsRaw)
 	if err != nil {
@@ -480,14 +485,25 @@ func scanProduct(row pgx.Row, product *domain.Product) error {
 	return nil
 }
 
-func marshalProductMetadata(gallery []string, specs map[string]any) ([]byte, []byte, error) {
-	normalizedGallery := make([]string, 0, len(gallery))
-	for _, image := range gallery {
+func marshalProductMetadata(primaryImage string, gallery []string, specs map[string]any) ([]byte, []byte, error) {
+	normalizedGallery := make([]string, 0, len(gallery)+1)
+	seen := make(map[string]struct{}, len(gallery)+1)
+
+	appendImage := func(image string) {
 		image = strings.TrimSpace(image)
 		if image == "" {
-			continue
+			return
 		}
+		if _, exists := seen[image]; exists {
+			return
+		}
+		seen[image] = struct{}{}
 		normalizedGallery = append(normalizedGallery, image)
+	}
+
+	appendImage(primaryImage)
+	for _, image := range gallery {
+		appendImage(image)
 	}
 
 	galleryRaw, err := json.Marshal(normalizedGallery)
@@ -506,7 +522,7 @@ func marshalProductMetadata(gallery []string, specs map[string]any) ([]byte, []b
 	return galleryRaw, specsRaw, nil
 }
 
-func decodeProductImages(imageURL string, galleryRaw []byte) ([]string, error) {
+func decodeProductImages(galleryRaw []byte) ([]string, error) {
 	images := make([]string, 0, 4)
 	seen := make(map[string]struct{}, 4)
 
@@ -521,8 +537,6 @@ func decodeProductImages(imageURL string, galleryRaw []byte) ([]string, error) {
 		seen[value] = struct{}{}
 		images = append(images, value)
 	}
-
-	appendImage(imageURL)
 
 	if len(galleryRaw) == 0 {
 		return images, nil

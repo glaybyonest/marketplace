@@ -23,7 +23,7 @@ func NewCartRepository(db *pgxpool.Pool) *CartRepository {
 
 func (r *CartRepository) Get(ctx context.Context, userID uuid.UUID) (domain.Cart, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT p.id, p.id, p.name, p.slug, p.sku, COALESCE(p.image_url, ''), p.price::double precision,
+		SELECT p.id, p.id, p.name, p.slug, p.sku, `+productPrimaryImageExpr+`, p.price::double precision,
 		       ci.quantity, (p.price * ci.quantity)::double precision, p.currency,
 		       p.stock_qty, p.is_active, ci.created_at, ci.updated_at
 		FROM cart_items ci
@@ -67,7 +67,7 @@ func (r *CartRepository) Get(ctx context.Context, userID uuid.UUID) (domain.Cart
 
 func (r *CartRepository) GetItem(ctx context.Context, userID, productID uuid.UUID) (domain.CartItem, error) {
 	row := r.db.QueryRow(ctx, `
-		SELECT p.id, p.id, p.name, p.slug, p.sku, COALESCE(p.image_url, ''), p.price::double precision,
+		SELECT p.id, p.id, p.name, p.slug, p.sku, `+productPrimaryImageExpr+`, p.price::double precision,
 		       ci.quantity, (p.price * ci.quantity)::double precision, p.currency,
 		       p.stock_qty, p.is_active, ci.created_at, ci.updated_at
 		FROM cart_items ci
