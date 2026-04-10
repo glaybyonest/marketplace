@@ -11,6 +11,7 @@ var (
 	ErrUnauthorized     = errors.New("unauthorized")
 	ErrForbidden        = errors.New("forbidden")
 	ErrInvalidInput     = errors.New("invalid input")
+	ErrUnprocessable    = errors.New("unprocessable entity")
 	ErrInactiveUser     = errors.New("inactive user")
 	ErrEmailNotVerified = errors.New("email not verified")
 	ErrInvalidToken     = errors.New("invalid token")
@@ -23,6 +24,8 @@ var (
 	ErrCartEmpty        = errors.New("cart is empty")
 	ErrStockShortage    = errors.New("insufficient stock")
 	ErrUnavailable      = errors.New("product unavailable")
+	ErrFeatureDisabled  = errors.New("feature disabled")
+	ErrProviderFailed   = errors.New("provider failed")
 )
 
 type RateLimitError struct {

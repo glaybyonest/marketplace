@@ -30,6 +30,10 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
     return 'Check the entered data and try again'
   }
 
+  if (backendCode === 'invalid_request') {
+    return 'Проверьте входные данные для AI-черновика и попробуйте снова'
+  }
+
   if (backendCode === 'unauthorized') {
     return 'Invalid email or password'
   }
@@ -84,6 +88,14 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed') => 
 
   if (backendCode === 'product_unavailable') {
     return 'Product is unavailable'
+  }
+
+  if (backendCode === 'feature_disabled') {
+    return 'AI-ассистент сейчас отключён'
+  }
+
+  if (backendCode === 'provider_unavailable') {
+    return 'AI-ассистент временно недоступен'
   }
 
   if (backendMessage) {

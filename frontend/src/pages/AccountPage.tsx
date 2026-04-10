@@ -115,6 +115,10 @@ export const AccountPage = () => {
             <strong>Заказы</strong>
             <p>История покупок, суммы заказов и адреса получения в одном разделе.</p>
           </Link>
+          <Link to="/account/messages" className={styles.linkCard}>
+            <strong>Локальный чат</strong>
+            <p>Быстрый доступ к диалогам с продавцами прямо из аккаунта.</p>
+          </Link>
           <Link to="/favorites" className={styles.linkCard}>
             <strong>Избранное</strong>
             <p>Подборка товаров, которые вы сохранили на потом.</p>

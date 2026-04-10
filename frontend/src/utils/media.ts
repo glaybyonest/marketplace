@@ -1,4 +1,4 @@
-import type { CartItem, Product, SellerProfile } from '@/types/domain'
+import type { CartItem, Conversation, Product, SellerProfile } from '@/types/domain'
 
 type ManagedMediaKind = 'product' | 'seller-logo' | 'seller-banner'
 
@@ -1500,6 +1500,36 @@ export const resolveCartItemImageFallback = (
     currency: item.currency,
     stock: item.stock,
     sku: item.sku,
+    renderMode: 'illustration',
+  })
+
+export const resolveConversationProductImage = (
+  conversation: Pick<
+    Conversation,
+    'id' | 'productId' | 'productName' | 'productImageUrl' | 'sellerName' | 'sellerStoreName'
+  >,
+) =>
+  resolveMediaUrl(conversation.productImageUrl, {
+    kind: 'product',
+    seed: conversation.productId || conversation.id,
+    title: conversation.productName,
+    subtitle: conversation.sellerStoreName || conversation.sellerName || 'Товар каталога',
+    badges: normalizeBadges([conversation.sellerStoreName, conversation.sellerName]),
+    renderMode: 'illustration',
+  })
+
+export const resolveConversationProductImageFallback = (
+  conversation: Pick<
+    Conversation,
+    'id' | 'productId' | 'productName' | 'sellerName' | 'sellerStoreName'
+  >,
+) =>
+  resolveMediaUrl(undefined, {
+    kind: 'product',
+    seed: conversation.productId || conversation.id,
+    title: conversation.productName,
+    subtitle: conversation.sellerStoreName || conversation.sellerName || 'Товар каталога',
+    badges: normalizeBadges([conversation.sellerStoreName, conversation.sellerName]),
     renderMode: 'illustration',
   })
 

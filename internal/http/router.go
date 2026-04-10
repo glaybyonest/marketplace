@@ -36,6 +36,8 @@ type Dependencies struct {
 	PlacesService          *usecase.PlacesService
 	RecommendationsService *usecase.RecommendationsService
 	SellerService          *usecase.SellerService
+	MessengerService       *usecase.MessengerService
+	SellerAIService        *usecase.SellerAIService
 	Security               SecurityConfig
 }
 
@@ -72,6 +74,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	placesHandler := handlers.NewPlacesHandler(deps.PlacesService)
 	recommendationsHandler := handlers.NewRecommendationsHandler(deps.RecommendationsService)
 	sellerHandler := handlers.NewSellerHandler(deps.SellerService)
+	messengerHandler := handlers.NewMessengerHandler(deps.MessengerService)
+	sellerAIHandler := handlers.NewSellerAIHandler(deps.SellerAIService)
 	healthHandler := handlers.NewHealthHandler(deps.DB)
 	mediaHandler := handlers.NewMediaHandler(nil)
 	scopedRatePolicy := func(policy httpmw.RateLimitPolicy, scope string) httpmw.RateLimitPolicy {
@@ -166,6 +170,13 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			r.Get("/recommendations", recommendationsHandler.List)
 			r.Post("/products/{id}/reviews", catalogHandler.ProductReviewCreate)
+			r.Get("/conversations/unread-count", messengerHandler.GetUnreadCount)
+			r.Get("/conversations", messengerHandler.ListConversations)
+			r.Post("/conversations", messengerHandler.CreateConversation)
+			r.Get("/conversations/{id}", messengerHandler.GetConversation)
+			r.Get("/conversations/{id}/messages", messengerHandler.ListMessages)
+			r.Post("/conversations/{id}/messages", messengerHandler.SendMessage)
+			r.Post("/conversations/{id}/read", messengerHandler.MarkAsRead)
 
 			r.Get("/seller/profile", sellerHandler.GetProfile)
 			r.Put("/seller/profile", sellerHandler.UpsertProfile)
@@ -178,6 +189,7 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Use(httpmw.RequireRole(domain.UserRoleSeller))
 
 			r.Get("/dashboard", sellerHandler.Dashboard)
+			r.Post("/ai/product-card", sellerAIHandler.GenerateProductCard)
 			r.Get("/products", sellerHandler.ProductsList)
 			r.Post("/products", sellerHandler.ProductCreate)
 			r.Patch("/products/{id}", sellerHandler.ProductUpdate)

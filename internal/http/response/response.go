@@ -74,6 +74,8 @@ func DescribeDomainError(err error) DomainErrorDescriptor {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
 		return DomainErrorDescriptor{Status: http.StatusBadRequest, Code: "invalid_input", Message: "invalid input"}
+	case errors.Is(err, domain.ErrUnprocessable):
+		return DomainErrorDescriptor{Status: http.StatusUnprocessableEntity, Code: "invalid_request", Message: "invalid request"}
 	case errors.Is(err, domain.ErrCSRFInvalid):
 		return DomainErrorDescriptor{Status: http.StatusForbidden, Code: "csrf_invalid", Message: "invalid csrf token"}
 	case errors.Is(err, domain.ErrCartEmpty):
@@ -94,6 +96,10 @@ func DescribeDomainError(err error) DomainErrorDescriptor {
 		return DomainErrorDescriptor{Status: http.StatusConflict, Code: "insufficient_stock", Message: "insufficient stock"}
 	case errors.Is(err, domain.ErrUnavailable):
 		return DomainErrorDescriptor{Status: http.StatusConflict, Code: "product_unavailable", Message: "product unavailable"}
+	case errors.Is(err, domain.ErrFeatureDisabled):
+		return DomainErrorDescriptor{Status: http.StatusServiceUnavailable, Code: "feature_disabled", Message: "feature is disabled"}
+	case errors.Is(err, domain.ErrProviderFailed):
+		return DomainErrorDescriptor{Status: http.StatusServiceUnavailable, Code: "provider_unavailable", Message: "service is temporarily unavailable"}
 	case errors.Is(err, domain.ErrNotFound):
 		return DomainErrorDescriptor{Status: http.StatusNotFound, Code: "not_found", Message: "resource not found"}
 	case errors.Is(err, domain.ErrConflict):

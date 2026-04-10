@@ -5,6 +5,7 @@ import { ProductGrid } from '@/components/catalog/ProductGrid'
 import { AppLoader } from '@/components/common/AppLoader'
 import { ErrorMessage } from '@/components/common/ErrorMessage'
 import { RatingStars } from '@/components/common/RatingStars'
+import { messengerService } from '@/services/messengerService'
 import { productService } from '@/services/productService'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { addCartItemThunk } from '@/store/slices/cartSlice'
@@ -14,8 +15,16 @@ import { fetchProductThunk } from '@/store/slices/productsSlice'
 import type { Product, Review } from '@/types/domain'
 import { formatCurrency, formatDate, formatReviewCount, formatUnitLabel } from '@/utils/format'
 import { getErrorMessage } from '@/utils/error'
-import { resolveProductImage, resolveProductImageFallback, swapImageToFallback } from '@/utils/media'
-import { formatProductSpecLabel, formatProductSpecValue, getProductSpecEntries } from '@/utils/productSpecs'
+import {
+  resolveProductImage,
+  resolveProductImageFallback,
+  swapImageToFallback,
+} from '@/utils/media'
+import {
+  formatProductSpecLabel,
+  formatProductSpecValue,
+  getProductSpecEntries,
+} from '@/utils/productSpecs'
 
 import styles from '@/pages/ProductPage.module.scss'
 
@@ -37,13 +46,23 @@ export const ProductPage = () => {
   const [selectedImages, setSelectedImages] = useState<Record<string, string>>({})
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [relatedItems, setRelatedItems] = useState<Product[]>([])
-  const [relatedStatus, setRelatedStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [relatedStatus, setRelatedStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>(
+    'idle',
+  )
   const [reviews, setReviews] = useState<Review[]>([])
-  const [reviewsStatus, setReviewsStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [reviewsStatus, setReviewsStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>(
+    'idle',
+  )
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' })
-  const [reviewSubmitStatus, setReviewSubmitStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>('idle')
+  const [reviewSubmitStatus, setReviewSubmitStatus] = useState<
+    'idle' | 'loading' | 'succeeded' | 'failed'
+  >('idle')
   const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null)
+  const [messageActionStatus, setMessageActionStatus] = useState<'idle' | 'loading' | 'failed'>(
+    'idle',
+  )
+  const [messageActionError, setMessageActionError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!productRef) {
@@ -158,9 +177,9 @@ export const ProductPage = () => {
       fallback: resolveProductImageFallback(product, index),
     }))
   }, [product])
-  const selectedImage = product ? selectedImages[product.id] ?? '' : ''
+  const selectedImage = product ? (selectedImages[product.id] ?? '') : ''
   const activeImage = gallery.find((image) => image.primary === selectedImage) ?? gallery[0]
-  const quantity = product ? quantities[product.id] ?? 1 : 1
+  const quantity = product ? (quantities[product.id] ?? 1) : 1
   const safeQuantity = Math.min(quantity, Math.max(product?.stock || 1, 1))
   const specEntries = getProductSpecEntries(product?.specs)
   const oldPrice = product ? Math.round(product.price * 1.14) : 0
@@ -208,6 +227,23 @@ export const ProductPage = () => {
     navigate('/cart')
   }
 
+  const handleContactSeller = async () => {
+    if (!product?.sellerId || !auth.user || auth.user.id === product.sellerId) {
+      return
+    }
+
+    setMessageActionStatus('loading')
+    setMessageActionError(null)
+
+    try {
+      const conversation = await messengerService.startConversation({ productId: product.id })
+      navigate(`/account/messages?conversation=${conversation.id}`)
+    } catch (error) {
+      setMessageActionStatus('failed')
+      setMessageActionError(getErrorMessage(error, 'Не удалось открыть диалог с продавцом'))
+    }
+  }
+
   const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -251,7 +287,9 @@ export const ProductPage = () => {
       <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
         <Link to="/">Главная</Link>
         <span>/</span>
-        <Link to={product.categoryId ? `/?category_id=${product.categoryId}` : '/'}>{product.categoryName ?? 'Каталог'}</Link>
+        <Link to={product.categoryId ? `/?category_id=${product.categoryId}` : '/'}>
+          {product.categoryName ?? 'Каталог'}
+        </Link>
         <span>/</span>
         <span>{product.title}</span>
       </nav>
@@ -264,7 +302,9 @@ export const ProductPage = () => {
                 <button
                   type="button"
                   key={`${image.primary}-${index}`}
-                  className={image.primary === activeImage?.primary ? styles.thumbActive : styles.thumb}
+                  className={
+                    image.primary === activeImage?.primary ? styles.thumbActive : styles.thumb
+                  }
                   onClick={() =>
                     setSelectedImages((current) => ({
                       ...current,
@@ -283,14 +323,22 @@ export const ProductPage = () => {
 
             <div className={styles.mainStage}>
               <div className={styles.visualBadges}>
-                {product.categoryName ? <span className="badge-pill">{product.categoryName}</span> : null}
-                {savings > 0 ? <span className={`${styles.discountBadge} badge-pill`}>Экономия {formatCurrency(savings, product.currency)}</span> : null}
+                {product.categoryName ? (
+                  <span className="badge-pill">{product.categoryName}</span>
+                ) : null}
+                {savings > 0 ? (
+                  <span className={`${styles.discountBadge} badge-pill`}>
+                    Экономия {formatCurrency(savings, product.currency)}
+                  </span>
+                ) : null}
               </div>
               <img
                 src={activeImage?.primary}
                 alt={product.title}
                 className={styles.mainImage}
-                onError={(event) => swapImageToFallback(event.currentTarget, activeImage?.fallback ?? '')}
+                onError={(event) =>
+                  swapImageToFallback(event.currentTarget, activeImage?.fallback ?? '')
+                }
               />
             </div>
           </div>
@@ -307,29 +355,48 @@ export const ProductPage = () => {
             <h1 className={styles.title}>{product.title}</h1>
 
             <div className={styles.metaRow}>
-              <span>{reviewsCount > 0 ? `Рейтинг ${averageRating.toFixed(1)} / 5 - ${formatReviewCount(reviewsCount)}` : 'Пока нет отзывов'}</span>
+              <span>
+                {reviewsCount > 0
+                  ? `Рейтинг ${averageRating.toFixed(1)} / 5 - ${formatReviewCount(reviewsCount)}`
+                  : 'Пока нет отзывов'}
+              </span>
               <span>{product.categoryName ?? 'Категория каталога'}</span>
               <span>{sellerLabel}</span>
               <span>{isAvailable ? `В наличии: ${product.stock}` : 'Под заказ'}</span>
             </div>
 
             <div className={styles.priceRow}>
-              <strong className={styles.currentPrice}>{formatCurrency(product.price, product.currency)}</strong>
-              {savings > 0 ? <span className={styles.oldPrice}>{formatCurrency(oldPrice, product.currency)}</span> : null}
+              <strong className={styles.currentPrice}>
+                {formatCurrency(product.price, product.currency)}
+              </strong>
+              {savings > 0 ? (
+                <span className={styles.oldPrice}>
+                  {formatCurrency(oldPrice, product.currency)}
+                </span>
+              ) : null}
             </div>
 
             <div className={styles.reviewSummaryBar}>
               <RatingStars rating={reviewsCount > 0 ? averageRating : 0} size="md" />
-              <strong>{reviewsCount > 0 ? `${averageRating.toFixed(1)} / 5` : 'Новый товар'}</strong>
-              <span>{reviewsCount > 0 ? formatReviewCount(reviewsCount) : 'Пока без отзывов и комментариев'}</span>
+              <strong>
+                {reviewsCount > 0 ? `${averageRating.toFixed(1)} / 5` : 'Новый товар'}
+              </strong>
+              <span>
+                {reviewsCount > 0
+                  ? formatReviewCount(reviewsCount)
+                  : 'Пока без отзывов и комментариев'}
+              </span>
             </div>
 
             <div className={isAvailable ? styles.stockChipActive : styles.stockChip}>
-              {isAvailable ? 'Можно оформить доставку или самовывоз' : 'Товар временно недоступен для быстрой покупки'}
+              {isAvailable
+                ? 'Можно оформить доставку или самовывоз'
+                : 'Товар временно недоступен для быстрой покупки'}
             </div>
 
             <p className={styles.description}>
-              {product.description || 'Описание пока не добавлено. Откройте характеристики и детали получения ниже.'}
+              {product.description ||
+                'Описание пока не добавлено. Откройте характеристики и детали получения ниже.'}
             </p>
 
             <div className={styles.statsGrid}>
@@ -387,7 +454,9 @@ export const ProductPage = () => {
                 {specEntries.map(([key, value]) => (
                   <div key={key} className={styles.specRow}>
                     <dt>{formatProductSpecLabel(key)}</dt>
-                    <dd>{formatProductSpecValue(value as string | number | boolean | null, key)}</dd>
+                    <dd>
+                      {formatProductSpecValue(value as string | number | boolean | null, key)}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -463,20 +532,28 @@ export const ProductPage = () => {
                   <button
                     type="submit"
                     className="action-primary"
-                    disabled={reviewSubmitStatus === 'loading' || reviewForm.comment.trim().length < 3}
+                    disabled={
+                      reviewSubmitStatus === 'loading' || reviewForm.comment.trim().length < 3
+                    }
                   >
                     {reviewSubmitStatus === 'loading' ? 'Отправляем...' : 'Оставить отзыв'}
                   </button>
                   {reviewSubmitStatus === 'succeeded' ? (
                     <span className={styles.reviewSuccess}>Спасибо, отзыв опубликован.</span>
                   ) : null}
-                  {reviewSubmitError ? <span className={styles.reviewError}>{reviewSubmitError}</span> : null}
+                  {reviewSubmitError ? (
+                    <span className={styles.reviewError}>{reviewSubmitError}</span>
+                  ) : null}
                 </div>
               </form>
             ) : (
               <div className={styles.reviewGuestCard}>
                 <p>Войдите в аккаунт, чтобы оставить отзыв и комментарий к товару.</p>
-                <button type="button" className="action-secondary" onClick={() => navigate('/login')}>
+                <button
+                  type="button"
+                  className="action-secondary"
+                  onClick={() => navigate('/login')}
+                >
                   Войти
                 </button>
               </div>
@@ -516,8 +593,14 @@ export const ProductPage = () => {
         <aside className={`${styles.purchasePanel} summary-card`}>
           <div className={styles.purchaseTop}>
             <span className="badge-pill">К покупке</span>
-            <strong className={styles.sidebarPrice}>{formatCurrency(product.price, product.currency)}</strong>
-            {savings > 0 ? <span className={styles.sidebarOldPrice}>{formatCurrency(oldPrice, product.currency)}</span> : null}
+            <strong className={styles.sidebarPrice}>
+              {formatCurrency(product.price, product.currency)}
+            </strong>
+            {savings > 0 ? (
+              <span className={styles.sidebarOldPrice}>
+                {formatCurrency(oldPrice, product.currency)}
+              </span>
+            ) : null}
           </div>
 
           <div className={styles.quantityCard}>
@@ -568,6 +651,27 @@ export const ProductPage = () => {
           >
             {isFavorite ? 'Убрать из избранного' : 'Сохранить в избранное'}
           </button>
+
+          {Boolean(
+            auth.isAuthenticated &&
+            auth.user?.id &&
+            product.sellerId &&
+            auth.user.id !== product.sellerId,
+          ) ? (
+            <>
+              <button
+                type="button"
+                className="action-secondary"
+                onClick={() => void handleContactSeller()}
+                disabled={messageActionStatus === 'loading'}
+              >
+                {messageActionStatus === 'loading' ? 'Открываем чат...' : 'Написать продавцу'}
+              </button>
+              {messageActionError ? (
+                <span className={styles.messageActionError}>{messageActionError}</span>
+              ) : null}
+            </>
+          ) : null}
 
           <div className={styles.purchaseMeta}>
             <div>

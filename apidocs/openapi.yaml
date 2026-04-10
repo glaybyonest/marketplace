@@ -1197,6 +1197,34 @@ paths:
           $ref: '#/components/responses/NotFoundResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
+  /api/v1/seller/ai/product-card:
+    post:
+      tags: [Seller]
+      operationId: sellerGenerateAIProductCard
+      summary: Generate or improve a structured seller product card draft
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SellerAIProductCardRequest'
+      responses:
+        '200':
+          description: Structured AI draft generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SellerAIProductCardResultEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '422':
+          $ref: '#/components/responses/InvalidRequestResponse'
+        '503':
+          $ref: '#/components/responses/SellerAIUnavailableResponse'
   /api/v1/seller/products:
     get:
       tags: [Seller]
@@ -1884,6 +1912,18 @@ components:
                 error:
                   code: invalid_input
                   message: invalid input
+    InvalidRequestResponse:
+      description: Request payload is syntactically valid JSON but fails AI endpoint validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            invalidRequest:
+              value:
+                error:
+                  code: invalid_request
+                  message: invalid request
     RateLimitedResponse:
       description: Too many requests for the same endpoint from the same client.
       headers:
@@ -2055,6 +2095,23 @@ components:
                 error:
                   code: internal_error
                   message: internal server error
+    SellerAIUnavailableResponse:
+      description: AI assistant is disabled or the upstream provider is temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            featureDisabled:
+              value:
+                error:
+                  code: feature_disabled
+                  message: feature is disabled
+            providerUnavailable:
+              value:
+                error:
+                  code: provider_unavailable
+                  message: service is temporarily unavailable
   schemas:
     ErrorEnvelope:
       type: object
@@ -2943,6 +3000,116 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/OrderPage'
+    SellerAIProductCardDraft:
+      type: object
+      required: [name, slug, description, brand, unit, specs]
+      properties:
+        name:
+          type: string
+          example: Термокружка Steel Cup 450 мл
+        slug:
+          type: string
+          example: termokruzhka-steel-cup-450-ml
+        description:
+          type: string
+          example: Аккуратный черновик карточки для маркетплейса без неподтверждённых обещаний.
+        brand:
+          type: string
+          example: Steel Cup
+        unit:
+          type: string
+          example: шт.
+        specs:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            Объём: 450 мл
+            Цвет: чёрный
+    SellerAIProductCardRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [generate, improve]
+          example: generate
+        category_id:
+          type: string
+          format: uuid
+          example: 6b997cc0-e76e-4c2f-a0a4-79a9a407f2cc
+        category_name:
+          type: string
+          maxLength: 160
+          example: Термопосуда
+        source_name:
+          type: string
+          maxLength: 180
+          example: Термокружка Steel Cup
+        raw_description:
+          type: string
+          maxLength: 4000
+          example: Дорожная термокружка с крышкой и двойными стенками.
+        features:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          example: [Двойные стенки, Подходит для кофе]
+        brand:
+          type: string
+          maxLength: 120
+          example: Steel Cup
+        unit:
+          type: string
+          maxLength: 64
+          example: шт.
+        specs:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            Объём: 450 мл
+        keywords:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          example: [термокружка, кружка для кофе]
+        tone:
+          type: string
+          enum: [neutral, sales, premium]
+          example: neutral
+        existing_draft:
+          $ref: '#/components/schemas/SellerAIProductCardDraft'
+    SellerAIProductCardResult:
+      type: object
+      required: [draft, warnings, missing_fields, provider, model]
+      properties:
+        draft:
+          $ref: '#/components/schemas/SellerAIProductCardDraft'
+        warnings:
+          type: array
+          items:
+            type: string
+          example: [Проверьте объём и характеристики вручную]
+        missing_fields:
+          type: array
+          items:
+            type: string
+          example: [сертификаты, страна происхождения]
+        provider:
+          type: string
+          example: openai
+        model:
+          type: string
+          example: gpt-4.1-mini
+    SellerAIProductCardResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/SellerAIProductCardResult'
     SellerProfile:
       type: object
       required: [user_id, store_name, store_slug, status, created_at, updated_at]

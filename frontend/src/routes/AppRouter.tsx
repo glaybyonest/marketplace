@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { AccountPage } from '@/pages/AccountPage'
+import { AccountMessagesPage } from '@/pages/AccountMessagesPage'
 import { AdminCategoriesPage } from '@/pages/AdminCategoriesPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { AdminProductsPage } from '@/pages/AdminProductsPage'
@@ -19,6 +20,7 @@ import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { SessionsPage } from '@/pages/SessionsPage'
 import { SellerHomePage } from '@/pages/SellerHomePage'
+import { SellerMessagesPage } from '@/pages/SellerMessagesPage'
 import { SellerOrdersPage } from '@/pages/SellerOrdersPage'
 import { SellerProductsPage } from '@/pages/SellerProductsPage'
 import { SellerStorefrontPage } from '@/pages/SellerStorefrontPage'
@@ -40,6 +42,7 @@ export const AppRouter = () => (
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/favorites" element={<FavoritesPage />} />
       <Route path="/account/orders" element={<OrdersPage />} />
+      <Route path="/account/messages" element={<AccountMessagesPage />} />
       <Route path="/account/places" element={<PlacesPage />} />
       <Route path="/account/sessions" element={<SessionsPage />} />
       <Route path="/seller" element={<SellerHomePage />} />
@@ -54,6 +57,7 @@ export const AppRouter = () => (
     <Route element={<ProtectedRoute requiredRole="seller" />}>
       <Route path="/seller/products" element={<SellerProductsPage />} />
       <Route path="/seller/storefront" element={<SellerStorefrontPage />} />
+      <Route path="/seller/messages" element={<SellerMessagesPage />} />
       <Route path="/seller/orders" element={<SellerOrdersPage />} />
     </Route>
 

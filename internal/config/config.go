@@ -57,6 +57,11 @@ type Config struct {
 	RecommendationActivityWindow  time.Duration
 	RecommendationUserBatchSize   int
 	RecommendationLimit           int
+	AIProductAssistantEnabled     bool
+	OpenAIAPIKey                  string
+	OpenAIModel                   string
+	OpenAITimeout                 time.Duration
+	OpenAIMaxOutputTokens         int
 }
 
 type rawConfig struct {
@@ -105,6 +110,11 @@ type rawConfig struct {
 	RecommendationActivityWindow  string `validate:"required"`
 	RecommendationUserBatchSize   int    `validate:"required,min=1,max=5000"`
 	RecommendationLimit           int    `validate:"required,min=1,max=100"`
+	AIProductAssistantEnabled     bool
+	OpenAIAPIKey                  string
+	OpenAIModel                   string `validate:"required,max=120"`
+	OpenAITimeout                 string `validate:"required"`
+	OpenAIMaxOutputTokens         int    `validate:"required,min=128,max=4096"`
 }
 
 // Load parses environment variables and validates configuration.
@@ -155,6 +165,11 @@ func Load() (Config, error) {
 		RecommendationActivityWindow:  env("JOB_RECOMMENDATION_ACTIVITY_WINDOW", "168h"),
 		RecommendationUserBatchSize:   envInt("JOB_RECOMMENDATION_USER_BATCH_SIZE", 200),
 		RecommendationLimit:           envInt("JOB_RECOMMENDATION_LIMIT", 20),
+		AIProductAssistantEnabled:     envBool("AI_PRODUCT_ASSISTANT_ENABLED", false),
+		OpenAIAPIKey:                  env("OPENAI_API_KEY", ""),
+		OpenAIModel:                   env("OPENAI_MODEL", "gpt-4.1-mini"),
+		OpenAITimeout:                 env("OPENAI_TIMEOUT", "8s"),
+		OpenAIMaxOutputTokens:         envInt("OPENAI_MAX_OUTPUT_TOKENS", 900),
 	}
 
 	v := validator.New(validator.WithRequiredStructEnabled())
@@ -262,8 +277,15 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse JOB_RECOMMENDATION_ACTIVITY_WINDOW: %w", err)
 	}
+	openAITimeout, err := time.ParseDuration(raw.OpenAITimeout)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse OPENAI_TIMEOUT: %w", err)
+	}
 	if cleanupInterval <= 0 || emailPollInterval <= 0 || emailLockTTL <= 0 || emailRetention <= 0 || statsRefreshInterval <= 0 || recommendationRefreshInterval <= 0 || recommendationActivityWindow <= 0 {
 		return Config{}, fmt.Errorf("job intervals and retention must be greater than zero")
+	}
+	if openAITimeout <= 0 {
+		return Config{}, fmt.Errorf("OPENAI_TIMEOUT must be greater than zero")
 	}
 
 	cfg := Config{
@@ -312,6 +334,11 @@ func Load() (Config, error) {
 		RecommendationActivityWindow:  recommendationActivityWindow,
 		RecommendationUserBatchSize:   raw.RecommendationUserBatchSize,
 		RecommendationLimit:           raw.RecommendationLimit,
+		AIProductAssistantEnabled:     raw.AIProductAssistantEnabled,
+		OpenAIAPIKey:                  strings.TrimSpace(raw.OpenAIAPIKey),
+		OpenAIModel:                   strings.TrimSpace(raw.OpenAIModel),
+		OpenAITimeout:                 openAITimeout,
+		OpenAIMaxOutputTokens:         raw.OpenAIMaxOutputTokens,
 	}
 	return cfg, nil
 }

@@ -15,7 +15,7 @@ import styles from '@/components/layout/Header.module.scss'
 interface NavItem {
   to: string
   label: string
-  icon: 'user' | 'orders' | 'heart' | 'cart' | 'account' | 'admin' | 'store'
+  icon: 'user' | 'orders' | 'heart' | 'cart' | 'account' | 'admin' | 'store' | 'messages'
 }
 
 const buyerItems: NavItem[] = [
@@ -25,7 +25,12 @@ const buyerItems: NavItem[] = [
   { to: '/cart', label: 'Корзина', icon: 'cart' },
 ]
 
+const buyerChatItem: NavItem = { to: '/account/messages', label: 'Чат', icon: 'messages' }
+const buyerNavItems: NavItem[] = [buyerItems[0]!, buyerItems[1]!, buyerChatItem, ...buyerItems.slice(2)]
+const sellerChatItem: NavItem = { to: '/seller/messages', label: 'Чат', icon: 'messages' }
+
 const sellerItems: NavItem[] = [
+  sellerChatItem,
   { to: '/seller', label: 'Магазин', icon: 'store' },
   { to: '/account', label: 'Кабинет', icon: 'account' },
   { to: '/favorites', label: 'Избранное', icon: 'heart' },
@@ -62,6 +67,13 @@ const renderIcon = (icon: NavItem['icon']) => {
           <path d="M4 8.5 5.4 4h13.2L20 8.5" />
           <path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9" />
           <path d="M9 20v-5.5h6V20" />
+        </svg>
+      )
+    case 'messages':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5.5 7.2A2.7 2.7 0 0 1 8.2 4.5h7.6a2.7 2.7 0 0 1 2.7 2.7v5.6a2.7 2.7 0 0 1-2.7 2.7H11l-3.8 3v-3H8.2a2.7 2.7 0 0 1-2.7-2.7Z" />
+          <path d="M9 9.5h6M9 12.5h4" />
         </svg>
       )
     case 'account':
@@ -104,14 +116,14 @@ export const Header = () => {
     }
 
     if (auth.user?.role === 'admin') {
-      return [...buyerItems, ...adminItems]
+      return [...buyerNavItems, ...adminItems]
     }
 
     if (auth.user?.role === 'seller') {
       return sellerItems
     }
 
-    return buyerItems
+    return buyerNavItems
   }, [auth.isAuthenticated, auth.user?.role])
 
   const topLinks = useMemo(() => {

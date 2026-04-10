@@ -5,6 +5,10 @@
   justify-content: flex-end;
 }
 
+.surface {
+  justify-content: flex-start;
+}
+
 .link {
   display: inline-flex;
   align-items: center;
@@ -37,6 +41,27 @@
   background: linear-gradient(180deg, #fffdfd, #fff1f2);
   border-color: rgb(var(--color-primary-rgb) / 0.16);
   box-shadow: 0 14px 30px rgb(var(--color-primary-dark-rgb) / 0.12);
+}
+
+.surfaceLink {
+  border-color: var(--color-border);
+  background: #fff8f8;
+  color: var(--color-text-primary);
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.surfaceLink:hover {
+  color: var(--color-primary);
+  background: #fff2f3;
+  border-color: rgb(var(--color-primary-rgb) / 0.22);
+}
+
+.surfaceActive {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary), #a91018);
+  border-color: transparent;
+  box-shadow: 0 14px 30px rgb(var(--color-primary-rgb) / 0.24);
 }
 
 @media (max-width: 768px) {

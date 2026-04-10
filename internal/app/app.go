@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	httpapi "marketplace-backend/internal/http"
 	httpmw "marketplace-backend/internal/http/middleware"
+	openaiintegration "marketplace-backend/internal/integrations/openai"
 	"marketplace-backend/internal/jobs"
 	"marketplace-backend/internal/mailer"
 	"marketplace-backend/internal/observability"
@@ -61,6 +63,9 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	eventRepo := postgres.NewEventRepository(db)
 	recommendationRepo := postgres.NewRecommendationRepository(db)
 	sellerRepo := postgres.NewSellerRepository(db)
+	conversationRepo := postgres.NewConversationRepository(db)
+	conversationMessageRepo := postgres.NewConversationMessageRepository(db)
+	conversationReadRepo := postgres.NewConversationReadStateRepository(db)
 
 	jwtManager := security.NewJWTManager(cfg.JWTSecret, cfg.AccessTokenTTL)
 	passwordManager := security.NewPasswordManager()
@@ -115,6 +120,17 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 	placesService := usecase.NewPlacesService(placeRepo)
 	recommendationsService := usecase.NewRecommendationsService(recommendationRepo)
 	sellerService := usecase.NewSellerService(sellerRepo, categoryRepo, productRepo, userRepo, auditLogger)
+	var sellerAIGenerator usecase.ProductCardDraftGenerator
+	if cfg.AIProductAssistantEnabled && strings.TrimSpace(cfg.OpenAIAPIKey) != "" {
+		sellerAIGenerator = openaiintegration.NewClient(
+			cfg.OpenAIAPIKey,
+			cfg.OpenAIModel,
+			cfg.OpenAITimeout,
+			cfg.OpenAIMaxOutputTokens,
+		)
+	}
+	sellerAIService := usecase.NewSellerAIService(cfg.AIProductAssistantEnabled, sellerAIGenerator)
+	messengerService := usecase.NewMessengerService(productRepo, conversationRepo, conversationMessageRepo, conversationReadRepo)
 	jobRunner := jobs.NewRunner(
 		logger,
 		jobs.Config{
@@ -156,6 +172,8 @@ func New(cfg config.Config, logger *slog.Logger) (*Application, error) {
 		PlacesService:          placesService,
 		RecommendationsService: recommendationsService,
 		SellerService:          sellerService,
+		SellerAIService:        sellerAIService,
+		MessengerService:       messengerService,
 		Security: httpapi.SecurityConfig{
 			RegisterRatePolicy: httpmw.RateLimitPolicy{
 				Name:   "auth_register",

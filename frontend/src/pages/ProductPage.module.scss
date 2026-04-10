@@ -527,6 +527,11 @@
   padding-top: 4px;
 }
 
+.messageActionError {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
 .purchaseMeta div {
   display: grid;
   gap: 4px;

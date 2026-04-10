@@ -186,3 +186,42 @@ export interface SellerDashboard {
   lowStock: Product[]
   recentOrders: SellerOrderSummary[]
 }
+
+export type ConversationRole = 'buyer' | 'seller' | 'all'
+
+export interface Conversation {
+  id: string
+  productId: string
+  productName: string
+  productImageUrl?: string
+  sellerId: string
+  sellerName: string
+  sellerStoreName?: string
+  buyerId: string
+  buyerName: string
+  orderId?: string
+  lastMessageAt: string
+  lastMessagePreview?: string
+  unreadCount: number
+  currentUserRole?: ConversationRole
+}
+
+export interface ConversationMessage {
+  id: string
+  conversationId: string
+  senderId: string
+  body: string
+  createdAt: string
+  editedAt?: string
+}
+
+export interface ConversationReadState {
+  conversationId: string
+  userId: string
+  lastReadMessageId?: string
+  lastReadAt?: string
+}
+
+export interface UnreadCount {
+  total: number
+}

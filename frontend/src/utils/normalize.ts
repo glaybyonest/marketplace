@@ -3,6 +3,10 @@ import type {
   Cart,
   CartItem,
   Category,
+  Conversation,
+  ConversationMessage,
+  ConversationReadState,
+  ConversationRole,
   Order,
   Place,
   Product,
@@ -14,11 +18,13 @@ import type {
   SellerProfile,
   SellerStatus,
   SessionInfo,
+  UnreadCount,
   User,
   UserRole,
 } from '@/types/domain'
 
-const asRecord = (value: unknown): Record<string, unknown> => (value as Record<string, unknown>) ?? {}
+const asRecord = (value: unknown): Record<string, unknown> =>
+  (value as Record<string, unknown>) ?? {}
 
 const pickString = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback)
 
@@ -26,7 +32,9 @@ const pickNumber = (value: unknown, fallback = 0) =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
 
 const asStringArray = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
 
 const normalizeSpecs = (value: unknown): ProductSpecs => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -55,7 +63,10 @@ const ensureRole = (value: unknown, hasIdentity = false): UserRole => {
 }
 
 const createId = () => {
-  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.randomUUID === 'function'
+  ) {
     return globalThis.crypto.randomUUID()
   }
 
@@ -65,7 +76,10 @@ const createId = () => {
 export const normalizeUser = (input: unknown): User => {
   const source = asRecord(input)
   const email = pickString(source.email)
-  const fullName = pickString(source.full_name, pickString(source.fullName, pickString(source.name)))
+  const fullName = pickString(
+    source.full_name,
+    pickString(source.fullName, pickString(source.name)),
+  )
   const emailVerifiedAt = pickString(source.email_verified_at, pickString(source.emailVerifiedAt))
   const isEmailVerified =
     source.is_email_verified === undefined
@@ -105,8 +119,14 @@ export const normalizeCategory = (input: unknown): Category => {
 
 export const normalizeProduct = (input: unknown): Product => {
   const source = asRecord(input)
-  const imageUrl = pickString(source.image_url, pickString(source.imageUrl, pickString(source.image)))
-  const gallery = asStringArray(source.images).length > 0 ? asStringArray(source.images) : asStringArray(source.gallery)
+  const imageUrl = pickString(
+    source.image_url,
+    pickString(source.imageUrl, pickString(source.image)),
+  )
+  const gallery =
+    asStringArray(source.images).length > 0
+      ? asStringArray(source.images)
+      : asStringArray(source.gallery)
   const images = Array.from(new Set([imageUrl, ...gallery].filter((image) => image.length > 0)))
   const specs = normalizeSpecs(source.specs)
 
@@ -127,12 +147,18 @@ export const normalizeProduct = (input: unknown): Product => {
     brand: pickString(source.brand),
     unit: pickString(source.unit),
     specs,
-    categoryId: pickString(source.category_id, pickString(source.categoryId, pickString(source.category, ''))),
+    categoryId: pickString(
+      source.category_id,
+      pickString(source.categoryId, pickString(source.category, '')),
+    ),
     categoryName: pickString(source.categoryName, pickString(source.category_name)),
     sellerId: pickString(source.seller_id, pickString(source.sellerId)),
     stock: pickNumber(source.stock_qty, pickNumber(source.stock, 0)),
     reviewsCount: pickNumber(source.reviews_count, pickNumber(source.reviewsCount, 0)),
-    isPublished: source.isPublished === undefined ? Boolean(source.is_active ?? true) : Boolean(source.isPublished),
+    isPublished:
+      source.isPublished === undefined
+        ? Boolean(source.is_active ?? true)
+        : Boolean(source.isPublished),
     isActive: source.is_active === undefined ? true : Boolean(source.is_active),
   }
 }
@@ -170,27 +196,51 @@ export const normalizeReview = (input: unknown): Review => {
     id: pickString(source.id, pickString(source._id, createId())),
     productId: pickString(source.product_id, pickString(source.productId)),
     userId: pickString(source.user_id, pickString(source.userId)),
-    userName: pickString(source.user_name, pickString(source.userName, pickString(source.author_name, pickString(source.authorName, 'Buyer')))),
+    userName: pickString(
+      source.user_name,
+      pickString(
+        source.userName,
+        pickString(source.author_name, pickString(source.authorName, 'Buyer')),
+      ),
+    ),
     rating: pickNumber(source.rating),
     comment: pickString(source.comment, pickString(source.text)),
-    createdAt: pickString(source.created_at, pickString(source.createdAt, new Date().toISOString())),
+    createdAt: pickString(
+      source.created_at,
+      pickString(source.createdAt, new Date().toISOString()),
+    ),
   }
 }
 
 export const normalizeCartItem = (input: unknown): CartItem => {
   const source = asRecord(input)
-  const productId = pickString(source.product_id, pickString(source.productId, pickString(source.id, createId())))
+  const productId = pickString(
+    source.product_id,
+    pickString(source.productId, pickString(source.id, createId())),
+  )
   const lineTotal = pickNumber(
     source.line_total,
-    pickNumber(source.lineTotal, pickNumber(source.total, pickNumber(source.price) * pickNumber(source.quantity, 1))),
+    pickNumber(
+      source.lineTotal,
+      pickNumber(source.total, pickNumber(source.price) * pickNumber(source.quantity, 1)),
+    ),
   )
   return {
     id: pickString(source.id, pickString(source._id, productId)),
     productId,
-    title: pickString(source.title, pickString(source.product_name, pickString(source.name, pickString(source.productTitle, 'Product')))),
+    title: pickString(
+      source.title,
+      pickString(
+        source.product_name,
+        pickString(source.name, pickString(source.productTitle, 'Product')),
+      ),
+    ),
     slug: pickString(source.slug),
     sku: pickString(source.sku),
-    sellerName: pickString(source.seller_store_name, pickString(source.seller_name, pickString(source.sellerName))),
+    sellerName: pickString(
+      source.seller_store_name,
+      pickString(source.seller_name, pickString(source.sellerName)),
+    ),
     imageUrl: pickString(source.image_url, pickString(source.imageUrl, pickString(source.image))),
     price: pickNumber(source.unit_price, pickNumber(source.price)),
     quantity: pickNumber(source.quantity, 1),
@@ -205,8 +255,11 @@ export const normalizeCart = (input: unknown): Cart => {
   const source = asRecord(input)
   const rawItems = Array.isArray(source.items) ? source.items : []
   const items = rawItems.map(normalizeCartItem)
-  const total = pickNumber(source.total_amount, pickNumber(source.total, NaN)) || items.reduce((acc, item) => acc + item.lineTotal, 0)
-  const totalItems = pickNumber(source.total_items, NaN) || items.reduce((acc, item) => acc + item.quantity, 0)
+  const total =
+    pickNumber(source.total_amount, pickNumber(source.total, NaN)) ||
+    items.reduce((acc, item) => acc + item.lineTotal, 0)
+  const totalItems =
+    pickNumber(source.total_items, NaN) || items.reduce((acc, item) => acc + item.quantity, 0)
   return {
     items,
     total,
@@ -224,7 +277,10 @@ export const normalizeOrder = (input: unknown): Order => {
     total: pickNumber(source.total_amount, pickNumber(source.total)),
     currency: pickString(source.currency, 'RUB'),
     status: pickString(source.status, 'pending') as Order['status'],
-    createdAt: pickString(source.created_at, pickString(source.createdAt, new Date().toISOString())),
+    createdAt: pickString(
+      source.created_at,
+      pickString(source.createdAt, new Date().toISOString()),
+    ),
     updatedAt: pickString(source.updated_at, pickString(source.updatedAt)),
     placeId: pickString(source.place_id, pickString(source.placeId)),
     placeTitle: pickString(source.place_title, pickString(source.placeTitle)),
@@ -249,6 +305,13 @@ const ensureSellerStatus = (value: unknown): SellerStatus => {
     return value
   }
   return 'active'
+}
+
+const ensureConversationRole = (value: unknown): ConversationRole | undefined => {
+  if (value === 'buyer' || value === 'seller' || value === 'all') {
+    return value
+  }
+  return undefined
 }
 
 export const normalizeSellerProfile = (input: unknown): SellerProfile => {
@@ -289,7 +352,10 @@ export const normalizeSellerOrderSummary = (input: unknown): SellerOrderSummary 
     orderId: pickString(source.order_id, pickString(source.orderId)),
     status: pickString(source.status, 'pending') as SellerOrderSummary['status'],
     currency: pickString(source.currency, 'RUB'),
-    createdAt: pickString(source.created_at, pickString(source.createdAt, new Date().toISOString())),
+    createdAt: pickString(
+      source.created_at,
+      pickString(source.createdAt, new Date().toISOString()),
+    ),
     placeTitle: pickString(source.place_title, pickString(source.placeTitle)),
     itemsCount: pickNumber(source.items_count, pickNumber(source.itemsCount)),
     grossRevenue: pickNumber(source.gross_revenue, pickNumber(source.grossRevenue)),
@@ -320,5 +386,66 @@ export const normalizeSellerDashboard = (input: unknown): SellerDashboard => {
     recentProducts,
     lowStock,
     recentOrders,
+  }
+}
+
+export const normalizeConversation = (input: unknown): Conversation => {
+  const source = asRecord(input)
+  return {
+    id: pickString(source.id, createId()),
+    productId: pickString(source.product_id, pickString(source.productId)),
+    productName: pickString(source.product_name, pickString(source.productName, 'Товар')),
+    productImageUrl:
+      pickString(source.product_image_url, pickString(source.productImageUrl)) || undefined,
+    sellerId: pickString(source.seller_id, pickString(source.sellerId)),
+    sellerName: pickString(source.seller_name, pickString(source.sellerName, 'Продавец')),
+    sellerStoreName:
+      pickString(source.seller_store_name, pickString(source.sellerStoreName)) || undefined,
+    buyerId: pickString(source.buyer_id, pickString(source.buyerId)),
+    buyerName: pickString(source.buyer_name, pickString(source.buyerName, 'Покупатель')),
+    orderId: pickString(source.order_id, pickString(source.orderId)) || undefined,
+    lastMessageAt: pickString(
+      source.last_message_at,
+      pickString(source.lastMessageAt, new Date().toISOString()),
+    ),
+    lastMessagePreview:
+      pickString(source.last_message_preview, pickString(source.lastMessagePreview)) || undefined,
+    unreadCount: pickNumber(source.unread_count, pickNumber(source.unreadCount)),
+    currentUserRole:
+      ensureConversationRole(source.current_user_role) ??
+      ensureConversationRole(source.currentUserRole),
+  }
+}
+
+export const normalizeConversationMessage = (input: unknown): ConversationMessage => {
+  const source = asRecord(input)
+  return {
+    id: pickString(source.id, createId()),
+    conversationId: pickString(source.conversation_id, pickString(source.conversationId)),
+    senderId: pickString(source.sender_id, pickString(source.senderId)),
+    body: pickString(source.body),
+    createdAt: pickString(
+      source.created_at,
+      pickString(source.createdAt, new Date().toISOString()),
+    ),
+    editedAt: pickString(source.edited_at, pickString(source.editedAt)) || undefined,
+  }
+}
+
+export const normalizeConversationReadState = (input: unknown): ConversationReadState => {
+  const source = asRecord(input)
+  return {
+    conversationId: pickString(source.conversation_id, pickString(source.conversationId)),
+    userId: pickString(source.user_id, pickString(source.userId)),
+    lastReadMessageId:
+      pickString(source.last_read_message_id, pickString(source.lastReadMessageId)) || undefined,
+    lastReadAt: pickString(source.last_read_at, pickString(source.lastReadAt)) || undefined,
+  }
+}
+
+export const normalizeUnreadCount = (input: unknown): UnreadCount => {
+  const source = asRecord(input)
+  return {
+    total: pickNumber(source.total),
   }
 }
