@@ -130,7 +130,7 @@ describe('AccountMessagesPage', () => {
       </Provider>,
     )
 
-    expect(screen.getByText('Сообщения')).toBeInTheDocument()
+    expect(screen.getByText('Локальный чат')).toBeInTheDocument()
     expect(screen.getByText('Диалогов')).toBeInTheDocument()
     expect((await screen.findAllByText('Smart Lamp')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('Bright Store')).length).toBeGreaterThan(0)

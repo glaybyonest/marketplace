@@ -36,6 +36,33 @@ const mergeConversations = (items: Conversation[], extra: Conversation | null) =
   )
 }
 
+const areConversationsEqual = (left: Conversation[], right: Conversation[]) =>
+  left.length === right.length &&
+  left.every((item, index) => {
+    const other = right[index]
+    return (
+      other &&
+      item.id === other.id &&
+      item.lastMessageAt === other.lastMessageAt &&
+      item.lastMessagePreview === other.lastMessagePreview &&
+      item.unreadCount === other.unreadCount &&
+      item.currentUserRole === other.currentUserRole
+    )
+  })
+
+const areMessagesEqual = (left: ConversationMessage[], right: ConversationMessage[]) =>
+  left.length === right.length &&
+  left.every((item, index) => {
+    const other = right[index]
+    return (
+      other &&
+      item.id === other.id &&
+      item.body === other.body &&
+      item.createdAt === other.createdAt &&
+      item.editedAt === other.editedAt
+    )
+  })
+
 export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
   const [searchParams, setSearchParams] = useSearchParams()
   const currentUser = useAppSelector((state) => state.auth.user)
@@ -65,11 +92,21 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
     [conversations, detachedConversation],
   )
 
+  const hasRequestedConversationInList = useMemo(
+    () => conversations.some((item) => item.id === requestedConversationId),
+    [conversations, requestedConversationId],
+  )
+
   const roleTitle = role === 'seller' ? 'Сообщения покупателей' : 'Сообщения'
   const roleDescription =
     role === 'seller'
       ? 'Диалоги по вашим товарам. Открывайте переписку и отвечайте без отдельного экрана товара.'
       : 'Ваши переписки с продавцами по конкретным товарам. Откройте диалог и продолжайте разговор с того же места.'
+  const inboxTitle = role === 'buyer' ? 'Локальный чат' : roleTitle
+  const inboxDescription =
+    role === 'buyer'
+      ? 'Ваши диалоги с продавцами в одном локальном пространстве. Откройте нужный чат и продолжайте обсуждение товара без поиска по страницам.'
+      : roleDescription
 
   const openConversation = (conversationId: string, replace = false) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -143,7 +180,9 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
       })
 
       const nextItems = mergeConversations(response.items, detachedConversation)
-      setConversations(nextItems)
+      setConversations((current) =>
+        areConversationsEqual(current, nextItems) ? current : nextItems,
+      )
       setListStatus('succeeded')
 
       if (requestedConversationId) {
@@ -174,8 +213,18 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
         return
       }
 
-      setDetachedConversation(conversation)
-      setConversations((current) => mergeConversations(current, conversation))
+      setDetachedConversation((current) =>
+        current?.id === conversation.id &&
+        current.lastMessageAt === conversation.lastMessageAt &&
+        current.lastMessagePreview === conversation.lastMessagePreview &&
+        current.unreadCount === conversation.unreadCount
+          ? current
+          : conversation,
+      )
+      setConversations((current) => {
+        const nextItems = mergeConversations(current, conversation)
+        return areConversationsEqual(current, nextItems) ? current : nextItems
+      })
     } catch {
       setDetachedConversation(null)
     }
@@ -196,7 +245,9 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
 
     try {
       const response = await messengerService.getMessages(conversationId, 1, 100)
-      setMessages(response.items)
+      setMessages((current) =>
+        areMessagesEqual(current, response.items) ? current : response.items,
+      )
       setMessagesStatus('succeeded')
 
       await messengerService.markAsRead(conversationId)
@@ -230,7 +281,7 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
       return
     }
 
-    if (!conversations.some((item) => item.id === requestedConversationId)) {
+    if (!hasRequestedConversationInList) {
       void syncDetachedConversation(requestedConversationId)
     }
 
@@ -246,7 +297,7 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [requestedConversationId, role])
+  }, [hasRequestedConversationInList, requestedConversationId, role])
 
   const handleSendMessage = async (body: string) => {
     if (!activeConversation) {
@@ -283,8 +334,8 @@ export const MessagesInbox = ({ role, nav }: MessagesInboxProps) => {
         <div className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
             <div>
-              <h1>{roleTitle}</h1>
-              <p>{roleDescription}</p>
+              <h1>{inboxTitle}</h1>
+              <p>{inboxDescription}</p>
             </div>
 
             <div className={styles.sidebarStats}>

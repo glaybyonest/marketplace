@@ -25,6 +25,9 @@ const getCounterpartyLabel = (conversation: Conversation, currentUserId: string)
   return conversation.buyerName
 }
 
+const getConversationModeLabel = (conversation: Conversation, currentUserId: string) =>
+  conversation.buyerId === currentUserId ? 'Локальный чат' : 'Запрос покупателя'
+
 export const ConversationList = ({
   conversations,
   activeConversationId,
@@ -54,18 +57,21 @@ export const ConversationList = ({
           )}
           onClick={() => onSelect(conversation.id)}
         >
-          <img
-            src={resolveConversationProductImage(conversation)}
-            alt={conversation.productName}
-            className={styles.conversationImage}
-            loading="lazy"
-            onError={(event) =>
-              swapImageToFallback(
-                event.currentTarget,
-                resolveConversationProductImageFallback(conversation),
-              )
-            }
-          />
+          <div className={styles.conversationVisual}>
+            <img
+              src={resolveConversationProductImage(conversation)}
+              alt={conversation.productName}
+              className={styles.conversationImage}
+              loading="lazy"
+              onError={(event) =>
+                swapImageToFallback(
+                  event.currentTarget,
+                  resolveConversationProductImageFallback(conversation),
+                )
+              }
+            />
+            <span className={styles.conversationVisualBadge}>Инфо</span>
+          </div>
 
           <div className={styles.conversationBody}>
             <div className={styles.conversationTop}>
@@ -82,6 +88,15 @@ export const ConversationList = ({
               {conversation.lastMessagePreview ||
                 'Диалог создан. Можно написать первое сообщение.'}
             </p>
+
+            <div className={styles.conversationChips}>
+              <span className={styles.conversationChip}>
+                {conversation.sellerStoreName || conversation.sellerName || 'Товар'}
+              </span>
+              <span className={styles.conversationChipMuted}>
+                {getConversationModeLabel(conversation, currentUserId)}
+              </span>
+            </div>
 
             <div className={styles.conversationFoot}>
               <span className={styles.conversationDate}>

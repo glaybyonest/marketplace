@@ -1515,7 +1515,7 @@ export const resolveConversationProductImage = (
     title: conversation.productName,
     subtitle: conversation.sellerStoreName || conversation.sellerName || 'Товар каталога',
     badges: normalizeBadges([conversation.sellerStoreName, conversation.sellerName]),
-    renderMode: 'photo',
+    renderMode: 'illustration',
   })
 
 export const resolveConversationProductImageFallback = (

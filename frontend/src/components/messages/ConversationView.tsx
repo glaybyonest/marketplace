@@ -33,6 +33,9 @@ const getCounterpartyLabel = (conversation: Conversation, currentUserId: string)
   return conversation.buyerName
 }
 
+const getConversationModeLabel = (conversation: Conversation, currentUserId: string) =>
+  conversation.buyerId === currentUserId ? 'Локальный чат' : 'Чат по товару'
+
 export const ConversationView = ({
   conversation,
   currentUserId,
@@ -72,22 +75,34 @@ export const ConversationView = ({
   return (
     <div className={styles.threadShell}>
       <div className={styles.threadHeader}>
-        <div className={styles.threadProduct}>
-          <img
-            src={resolveConversationProductImage(conversation)}
-            alt={conversation.productName}
-            className={styles.threadProductImage}
-            onError={(event) =>
-              swapImageToFallback(
-                event.currentTarget,
-                resolveConversationProductImageFallback(conversation),
-              )
-            }
-          />
+        <div className={styles.threadProductCard}>
+          <div className={styles.threadProductVisual}>
+            <img
+              src={resolveConversationProductImage(conversation)}
+              alt={conversation.productName}
+              className={styles.threadProductImage}
+              onError={(event) =>
+                swapImageToFallback(
+                  event.currentTarget,
+                  resolveConversationProductImageFallback(conversation),
+                )
+              }
+            />
+            <span className={styles.threadProductBadge}>Инфографика</span>
+          </div>
           <div className={styles.threadTitle}>
-            <span className={styles.threadTag}>Товар</span>
+            <div className={styles.threadTags}>
+              <span className={styles.threadTag}>Товар</span>
+              <span className={styles.threadTagMuted}>
+                {getConversationModeLabel(conversation, currentUserId)}
+              </span>
+            </div>
             <h2>{conversation.productName}</h2>
             <p>{getCounterpartyLabel(conversation, currentUserId)}</p>
+            <div className={styles.threadFacts}>
+              <span>{conversation.sellerStoreName || conversation.sellerName}</span>
+              <span>#{conversation.productId.slice(0, 8)}</span>
+            </div>
           </div>
         </div>
 

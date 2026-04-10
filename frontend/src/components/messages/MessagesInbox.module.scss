@@ -133,6 +133,31 @@
   font-weight: 800;
 }
 
+.conversationVisual {
+  position: relative;
+  width: 72px;
+}
+
+.conversationVisualBadge {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgb(9 9 10 / 0.72);
+  color: #fff7f7;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
 .conversationBody {
   display: grid;
   gap: 10px;
@@ -176,6 +201,33 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+.conversationChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conversationChip,
+.conversationChipMuted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.conversationChip {
+  background: rgb(var(--color-primary-rgb) / 0.09);
+  color: var(--color-primary);
+}
+
+.conversationChipMuted {
+  background: #fff3f4;
+  color: var(--color-text-secondary);
 }
 
 .conversationFoot {
@@ -227,20 +279,63 @@
   min-width: 0;
 }
 
-.threadProductImage {
-  width: 68px;
-  height: 68px;
+.threadProductCard {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fffafa 0%, #fff1f3 100%);
+  border: 1px solid #f1dfe2;
+}
+
+.threadProductVisual {
+  position: relative;
   flex: 0 0 auto;
-  border-radius: 20px;
+}
+
+.threadProductImage {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  border-radius: 24px;
   object-fit: cover;
   background: #fff2f3;
-  border: 1px solid rgb(var(--color-primary-rgb) / 0.12);
+  border: 1px solid rgb(var(--color-primary-rgb) / 0.16);
+  box-shadow: 0 16px 30px rgb(var(--color-primary-dark-rgb) / 0.08);
+}
+
+.threadProductBadge {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(9 9 10 / 0.76);
+  color: #fff7f7;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
 }
 
 .threadTitle {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+
+.threadTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .threadTitle h2,
@@ -255,6 +350,25 @@
   white-space: nowrap;
 }
 
+.threadFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.threadFacts span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #f0e0e2;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .threadTag {
   display: inline-flex;
   align-items: center;
@@ -266,6 +380,20 @@
   color: var(--color-primary);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.threadTagMuted {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #f0e0e2;
 }
 
 .messages {
@@ -432,6 +560,10 @@
     grid-template-columns: 60px minmax(0, 1fr);
   }
 
+  .conversationVisual {
+    width: 60px;
+  }
+
   .conversationImage,
   .conversationImagePlaceholder {
     width: 60px;
@@ -445,5 +577,16 @@
   .threadProduct {
     width: 100%;
     align-items: flex-start;
+  }
+
+  .threadProductCard {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .threadProductImage {
+    width: 76px;
+    height: 76px;
+    border-radius: 20px;
   }
 }
