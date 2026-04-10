@@ -37,6 +37,7 @@ type Dependencies struct {
 	RecommendationsService *usecase.RecommendationsService
 	SellerService          *usecase.SellerService
 	MessengerService       *usecase.MessengerService
+	SellerAIService        *usecase.SellerAIService
 	Security               SecurityConfig
 }
 
@@ -74,6 +75,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	recommendationsHandler := handlers.NewRecommendationsHandler(deps.RecommendationsService)
 	sellerHandler := handlers.NewSellerHandler(deps.SellerService)
 	messengerHandler := handlers.NewMessengerHandler(deps.MessengerService)
+	sellerAIHandler := handlers.NewSellerAIHandler(deps.SellerAIService)
 	healthHandler := handlers.NewHealthHandler(deps.DB)
 	mediaHandler := handlers.NewMediaHandler(nil)
 	scopedRatePolicy := func(policy httpmw.RateLimitPolicy, scope string) httpmw.RateLimitPolicy {
@@ -187,6 +189,7 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Use(httpmw.RequireRole(domain.UserRoleSeller))
 
 			r.Get("/dashboard", sellerHandler.Dashboard)
+			r.Post("/ai/product-card", sellerAIHandler.GenerateProductCard)
 			r.Get("/products", sellerHandler.ProductsList)
 			r.Post("/products", sellerHandler.ProductCreate)
 			r.Patch("/products/{id}", sellerHandler.ProductUpdate)

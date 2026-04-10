@@ -218,6 +218,14 @@
 Основные шаблоны уже лежат в репозитории:
 
 - `./.env.example`
+
+## AI product assistant
+
+- MVP AI-ассистент встроен в существующую seller product form и не создаёт, не сохраняет и не публикует товар автоматически.
+- Backend endpoint: `POST /api/v1/seller/ai/product-card`.
+- Архитектура модуля повторяет проектный стиль: `internal/usecase/seller_ai.go` валидирует и нормализует входные данные, собирает prompt/schema, вызывает AI generator interface и санитизирует результат; `internal/integrations/openai/client.go` реализует backend-only интеграцию с OpenAI Responses API; `internal/http/handlers/seller_ai.go` обслуживает seller-only HTTP endpoint.
+- Structured output ограничен полями текущей product form: `name`, `slug`, `description`, `brand`, `unit`, `specs`, плюс `warnings` и `missing_fields`.
+- Если `AI_PRODUCT_ASSISTANT_ENABLED=false` или не настроен `OPENAI_API_KEY`, endpoint возвращает controlled `503`, а seller UI продолжает работать без AI.
 - `./.env.production.example`
 - `frontend/.env.example`
 - `frontend/.env.production.example`
